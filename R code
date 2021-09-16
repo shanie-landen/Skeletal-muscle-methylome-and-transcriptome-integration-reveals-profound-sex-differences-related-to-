@@ -1,0 +1,4625 @@
+#make descriptive pheno table
+library(sjPlot)
+
+
+#see other script for was my version, but there are all Beta values. Sarah has preprocessed them and uploaded M, so use hers. SEe below
+#use Sarah's because she already did the preprocessing and uploaded the M
+setwd("~/git/git")
+GSE38291_M=read.delim('GSE38291_M.txt')
+GSE38291_pheno=read.delim('GSE38291_phenotypes.txt')
+
+#remove cross-hyb probes
+#cross_hyb_probes=read.delim("cross-hybridizing_probes.txt",header = TRUE)
+#s=substr(cross_hyb_probes$X.match47.match48.match49.match50.Total,1,10)
+#cross_hyb_probes$probeID=s
+
+#filter BEFORE limma
+#GSE38291_M=GSE38291_M[!(rownames(GSE38291_M) %in% cross_hyb_probes$probeID),] #there are still 73 probes but because my analysis will only include if at least in two studies then doesnt matter
+
+
+#RUN LINEAR MODEL
+library(limma)
+#Create the model with Age as a predictor, and add other covariates
+design=model.matrix(~Age+
+                      Sex+ #adjust for sex
+                      Status, #adjust for disease state
+                    GSE38291_pheno)
+corfit <- duplicateCorrelation(GSE38291_M,
+                               design,
+                               block=GSE38291_pheno$Sibship) #take into account twinship
+#corfit$consensus = 0.4669214
+fit1 <- lmFit(GSE38291_M, #do the analysis on the M-matrix
+              design,
+              block=GSE38291_pheno$Sibship,
+              correlation=0.466569)
+fit2 <- eBayes(fit1)
+
+#SE: SE around the slope for age
+#ES:change in methylation per year of age
+#Obtain regression coefficient and p-value for each CpG
+results <- topTable(fit2,
+                    coef="SexM",
+                    number=Inf,
+                    p.value=1)
+#Obtain standard error
+SE <- fit2$sigma * fit2$stdev.unscaled
+
+SE <- SE[rownames(results),"SexM"]
+results <- cbind(results,SE)
+
+
+
+#Save results, need it in a format good for METAL
+CPG <- rownames(results) #name of marker (CpG)
+ALLELE1 <- rep(1,nrow(results)) #fake allele info (not important)
+ALLELE2 <- rep(2,nrow(results)) #fake allele info (not important)
+TESTSTAT <- results$t #t-statistic
+PVALUE <- results$P.Value #p-value
+EFFECTSIZE <- results$logFC #effect size
+SE <- results$SE #standard error
+results = data.frame(CPG,
+                     ALLELE1,
+                     ALLELE2,
+                     TESTSTAT,
+                     PVALUE,
+                     EFFECTSIZE,
+                     SE)
+write.table(results,
+            file="GSE38291.tbl",
+            quote = FALSE,
+            row.names = FALSE,
+            col.names = TRUE,
+            sep="\t")
+
+#now FUSION data
+FUSION_B=read.delim("FUSION_B_xhyb_removed.txt")  #oops it was a beta matrix.....redo
+FUSION_pheno=read.delim("FUSION_phenotypes.txt")
+
+FUSION_M=logit2(FUSION_B)
+
+#Create the model with Age as a predictor, and add other covariates
+design=model.matrix(~age_biopsy+sex+bmi+smoke_current+ogtt_status, #adjust for BMI
+                     FUSION_pheno)
+
+fit1 <- lmFit(FUSION_M, #do the analysis on the M-matrix
+              design)
+fit2 <- eBayes(fit1)
+
+#SE: SE around the slope for age
+#ES:change in methylation per year of age
+#Obtain regression coefficient and p-value for each CpG
+results <- limma::topTable(fit2,
+                    coef="sexM",
+                    number=Inf,
+                    p.value=1)
+#Obtain standard error
+SE <- fit2$sigma * fit2$stdev.unscaled
+
+SE <- SE[rownames(results),"sexM"]
+results <- cbind(results,SE)
+
+
+
+#Save results, need it in a format good for METAL
+CPG <- rownames(results) #name of marker (CpG)
+ALLELE1 <- rep(1,nrow(results)) #fake allele info (not important)
+ALLELE2 <- rep(2,nrow(results)) #fake allele info (not important)
+TESTSTAT <- results$t #t-statistic
+PVALUE <- results$P.Value #p-value
+EFFECTSIZE <- results$logFC #effect size
+SE <- results$SE #standard error
+results = data.frame(CPG,
+                     ALLELE1,
+                     ALLELE2,
+                     TESTSTAT,
+                     PVALUE,
+                     EFFECTSIZE,
+                     SE)
+write.table(results,
+            file="FUSION.tbl",
+            quote = FALSE,
+            row.names = FALSE,
+            col.names = TRUE,
+            sep="\t")
+
+#now my data
+setwd("~/git")
+M_merged_QUT_diagen=read.delim("M_merged_QUT_diagen_xhyb.txt")
+
+merged_pheno=read.delim("merged_pheno.txt")
+
+library(limma)
+design <- model.matrix(~sex*Timepoint+Age_PRE+batch,
+                       merged_pheno)
+
+corfit <- duplicateCorrelation(M_merged_QUT_diagen,
+                               design,
+                               block = merged_pheno$ID) #watch out this takes 30 min (took 1:50!!!!gr)
+#corfit consensus=0.2526923 for M
+
+fit = lmFit(M_merged_QUT_diagen,
+            design,
+            block=merged_pheno$ID,
+            correlation=corfit$consensus) 
+
+fit2 <- eBayes(fit)
+results=topTable(fit2,
+                      coef = "sexmale",
+                      number = nrow(M_merged_QUT_diagen),
+                      p.value = 1)
+#Obtain standard error
+SE <- fit2$sigma * fit2$stdev.unscaled
+
+SE <- SE[rownames(results),"sexmale"]
+results <- cbind(results,SE)
+
+
+
+#Save results, need it in a format good for METAL
+CPG <- rownames(results) #name of marker (CpG)
+ALLELE1 <- rep(1,nrow(results)) #fake allele info (not important)
+ALLELE2 <- rep(2,nrow(results)) #fake allele info (not important)
+TESTSTAT <- results$t #t-statistic
+PVALUE <- results$P.Value #p-value
+EFFECTSIZE <- results$logFC #effect size
+SE <- results$SE #standard error
+results = data.frame(CPG,
+                     ALLELE1,
+                     ALLELE2,
+                     TESTSTAT,
+                     PVALUE,
+                     EFFECTSIZE,
+                     SE)
+write.table(results,
+            file="GENESMART.tbl",
+            quote = FALSE,
+            row.names = FALSE,
+            col.names = TRUE,
+            sep="\t")
+
+#now do Beta value tbls....
+GSE38291_B=ilogit2(GSE38291_M)
+GSE38291_pheno=read.delim('GSE38291_phenotypes.txt')
+
+#RUN LINEAR MODEL
+library(limma)
+#Create the model with Age as a predictor, and add other covariates
+design=model.matrix(~Age+
+                      Sex+ #adjust for sex
+                      Status, #adjust for disease state
+                    GSE38291_pheno)
+corfit <- duplicateCorrelation(GSE38291_B,
+                               design,
+                               block=GSE38291_pheno$Sibship) #take into account twinship
+#Beta corfit$consensus = 0.4831333
+#corfit$consensus = 0.4669214 (for M values)
+fit1 <- lmFit(GSE38291_B, #do the analysis on the M-matrix
+              design,
+              block=GSE38291_pheno$Sibship,
+              correlation=corfit$consensus)
+fit2 <- eBayes(fit1)
+
+#SE: SE around the slope for age
+#ES:change in methylation per year of age
+#Obtain regression coefficient and p-value for each CpG
+results <- topTable(fit2,
+                    coef="SexM",
+                    number=Inf,
+                    p.value=1)
+#Obtain standard error
+SE <- fit2$sigma * fit2$stdev.unscaled
+
+SE <- SE[rownames(results),"SexM"]
+results <- cbind(results,SE)
+
+
+
+#Save results, need it in a format good for METAL
+CPG <- rownames(results) #name of marker (CpG)
+ALLELE1 <- rep(1,nrow(results)) #fake allele info (not important)
+ALLELE2 <- rep(2,nrow(results)) #fake allele info (not important)
+TESTSTAT <- results$t #t-statistic
+PVALUE <- results$P.Value #p-value
+EFFECTSIZE <- results$logFC #effect size
+SE <- results$SE #standard error
+results = data.frame(CPG,
+                     ALLELE1,
+                     ALLELE2,
+                     TESTSTAT,
+                     PVALUE,
+                     EFFECTSIZE,
+                     SE)
+write.table(results,
+            file="GSE38291_B.tbl",
+            quote = FALSE,
+            row.names = FALSE,
+            col.names = TRUE,
+            sep="\t")
+
+#now FUSION data
+setwd("~/git/git")
+FUSION_B=read.delim("FUSION_B_xhyb_removed.txt")
+FUSION_pheno=read.delim("FUSION_phenotypes.txt")
+
+
+#Create the model with Age as a predictor, and add other covariates
+design=model.matrix(~age_biopsy+sex+bmi+smoke_current+ogtt_status, #adjust for BMI
+                    FUSION_pheno)
+
+fit1 <- lmFit(FUSION_B, #do the analysis on the M-matrix
+              design)
+fit2 <- eBayes(fit1)
+
+#SE: SE around the slope for age
+#ES:change in methylation per year of age
+#Obtain regression coefficient and p-value for each CpG
+results <- limma::topTable(fit2,
+                    coef="sexM",
+                    number=Inf,
+                    p.value=1)
+#Obtain standard error
+SE <- fit2$sigma * fit2$stdev.unscaled
+
+SE <- SE[rownames(results),"sexM"]
+results <- cbind(results,SE)
+
+
+
+#Save results, need it in a format good for METAL
+CPG <- rownames(results) #name of marker (CpG)
+ALLELE1 <- rep(1,nrow(results)) #fake allele info (not important)
+ALLELE2 <- rep(2,nrow(results)) #fake allele info (not important)
+TESTSTAT <- results$t #t-statistic
+PVALUE <- results$P.Value #p-value
+EFFECTSIZE <- results$logFC #effect size
+SE <- results$SE #standard error
+results = data.frame(CPG,
+                     ALLELE1,
+                     ALLELE2,
+                     TESTSTAT,
+                     PVALUE,
+                     EFFECTSIZE,
+                     SE)
+write.table(results,
+            file="FUSION_B.tbl",
+            quote = FALSE,
+            row.names = FALSE,
+            col.names = TRUE,
+            sep="\t")
+
+#now my data
+setwd("~/git/git")
+M_merged_QUT_diagen=read.delim("M_merged_QUT_diagen_xhyb.txt")
+Gene_SMART_B=ilogit2(M_merged_QUT_diagen)
+merged_pheno=read.delim("merged_pheno.txt")
+
+library(limma)
+design <- model.matrix(~sex*Timepoint+Age_PRE+batch,
+                       merged_pheno)
+
+corfit <- duplicateCorrelation(Gene_SMART_B,
+                               design,
+                               block = merged_pheno$ID) #watch out this takes 30 min
+#Beta corfit consensus=0.2526871
+
+fit = lmFit(Gene_SMART_B,
+            design,
+            block=merged_pheno$ID,
+            correlation=corfit$consensus.correlation) #I have chosen the option "robust" which will downplay the influence of outliers. This takes significantly more time for your computer to run but is more robust and is always my preference.
+
+fit2 <- eBayes(fit)
+results=topTable(fit2,
+                 coef = "sexmale",
+                 number = nrow(Gene_SMART_B),
+                 p.value = 1)
+#Obtain standard error
+SE <- fit2$sigma * fit2$stdev.unscaled
+
+SE <- SE[rownames(results),"sexmale"]
+results <- cbind(results,SE)
+
+
+
+#Save results, need it in a format good for METAL
+CPG <- rownames(results) #name of marker (CpG)
+ALLELE1 <- rep(1,nrow(results)) #fake allele info (not important)
+ALLELE2 <- rep(2,nrow(results)) #fake allele info (not important)
+TESTSTAT <- results$t #t-statistic
+PVALUE <- results$P.Value #p-value
+EFFECTSIZE <- results$logFC #effect size
+SE <- results$SE #standard error
+results = data.frame(CPG,
+                     ALLELE1,
+                     ALLELE2,
+                     TESTSTAT,
+                     PVALUE,
+                     EFFECTSIZE,
+                     SE)
+write.table(results,
+            file="GENESMART_B.tbl",
+            quote = FALSE,
+            row.names = FALSE,
+            col.names = TRUE,
+            sep="\t")
+
+library(bacon)
+
+setwd("~/git/git/tbls_for_meta")
+#List all files ending in "tbl" in the folder
+files <- list.files()[grep(".tbl",list.files())]
+directory="~/git/git/tbls_for_meta/new tbls"
+library(tidyverse)
+
+#Run each file in bacon using a loop
+for (f in files)
+{
+  file <- read_tsv(f) #Read the file
+  f <- sub("\\.tbl", "", f) #Obtain the name of the dataset without the ".tbl" at the end
+  print(f) #show which dataset we are currently analysing
+  bc <- bacon(teststatistics = NULL, #run bacon on effect sizes and standard errors
+              effectsizes = file$EFFECTSIZE,
+              standarderrors = file$SE)
+  #bias and inflation=what it outputs  
+  tiff(paste0('QQ-plot_',f,'.tiff'), #save the graph of raw and adjusted effect sizes and standard errors
+       width =4,
+       height = 2.5,
+       units = 'in',
+       res=600)
+  print(plot(bc, type="qq")) #q-q plot shows the deviation of p-value distribution from null hypothesis. The observed P values for each CpG are sorted from largest to smallest and plotted against expected values from a theoretical ??2-distribution.
+  dev.off()
+  
+  print(c(inflation(bc), #show the inflation factor for this dataset
+          bias(bc))) #show the bias factor for this dataset
+  
+  file$EFFECTSIZE_CORR <- es(bc)[,1] #add a column to the file corresponding to the corrected effect size
+  file$SE_CORR <- se(bc)[,1] #add a column to the file corresponding to the corrected standard error
+  file$PVALUE_CORR <- pval(bc)[,1] #add a column to the file corresponding to the corrected p-value
+  write.table(file, #save the file
+              file=paste0(directory,"/",f,"_corrected.tbl"),
+              quote = FALSE,
+              row.names = FALSE,
+              col.names = TRUE,
+              sep="\t")
+}
+
+#redo all three of those + bacon but for beta values
+#FOR THE BETA VALUES FILE: METAL doesn't like small values and it will round them up to a point that is no longer exploitable, so before you run METAL (just after bacon), multiply the beta-values adjusted effect sizes and standard errors by 100
+setwd("~/git/git/tbls_for_meta/new tbls")
+FUSION_B_corrected=read.delim("FUSION_B_corrected.tbl")
+FUSION_B_corrected$EFFECTSIZE_CORR100=FUSION_B_corrected$EFFECTSIZE_CORR*100
+FUSION_B_corrected$SE_CORR_100=FUSION_B_corrected$SE_CORR*100
+
+GENESMART_B_corrected=read.delim("GENESMART_B_corrected.tbl")
+GENESMART_B_corrected$EFFECTSIZE_CORR100=GENESMART_B_corrected$EFFECTSIZE_CORR*100
+GENESMART_B_corrected$SE_CORR_100=GENESMART_B_corrected$SE_CORR*100
+
+GSE38291_B_corrected=read.delim("GSE38291_B_corrected.tbl")
+GSE38291_B_corrected$EFFECTSIZE_CORR100=GSE38291_B_corrected$EFFECTSIZE_CORR*100
+GSE38291_B_corrected$SE_CORR_100=GSE38291_B_corrected$SE_CORR*100
+
+#resave the three of them
+write.table(GSE38291_B_corrected,
+            file="GSE38291_B_corrected_final.tbl",
+            quote = FALSE,
+            row.names = FALSE,
+            col.names = TRUE,
+            sep="\t")
+
+write.table(FUSION_B_corrected,
+            file="FUSION_B_corrected_final.tbl",
+            quote = FALSE,
+            row.names = FALSE,
+            col.names = TRUE,
+            sep="\t")
+
+write.table(GENESMART_B_corrected,
+            file="GENESMART_B_corrected_final.tbl",
+            quote = FALSE,
+            row.names = FALSE,
+            col.names = TRUE,
+            sep="\t")
+
+###STOP REGULAR CODE, THIS IS FOR REMOVING DIABETICS FROM FUSION
+#remove unhealthy people from FUSION and redo tbls and meta for analysis
+#now FUSION data
+setwd("~/git/git")
+FUSION_B=read.delim("FUSION_B_xhyb_removed.txt")
+FUSION_pheno=read.delim("FUSION_phenotypes.txt")
+
+#remove if diabeticFUSION_pheno
+library(dplyr)
+FUSION_pheno_noT2D=FUSION_pheno %>% filter(ogtt_status!="T2D")
+FUSION_B_noT2D=FUSION_B[,colnames(FUSION_B) %in% FUSION_pheno_noT2D$SUBJECT_ID]
+
+#Create the model with Age as a predictor, and add other covariates
+design=model.matrix(~age_biopsy+sex+bmi+smoke_current+ogtt_status, #adjust for BMI
+                    FUSION_pheno_noT2D)
+
+fit1 <- lmFit(FUSION_B_noT2D, #do the analysis on the M-matrix
+              design)
+fit2 <- eBayes(fit1)
+
+#SE: SE around the slope for age
+#ES:change in methylation per year of age
+#Obtain regression coefficient and p-value for each CpG
+results <- limma::topTable(fit2,
+                           coef="sexM",
+                           number=Inf,
+                           p.value=1)
+#Obtain standard error
+SE <- fit2$sigma * fit2$stdev.unscaled
+
+SE <- SE[rownames(results),"sexM"]
+results <- cbind(results,SE)
+
+
+
+#Save results, need it in a format good for METAL
+CPG <- rownames(results) #name of marker (CpG)
+ALLELE1 <- rep(1,nrow(results)) #fake allele info (not important)
+ALLELE2 <- rep(2,nrow(results)) #fake allele info (not important)
+TESTSTAT <- results$t #t-statistic
+PVALUE <- results$P.Value #p-value
+EFFECTSIZE <- results$logFC #effect size
+SE <- results$SE #standard error
+results = data.frame(CPG,
+                     ALLELE1,
+                     ALLELE2,
+                     TESTSTAT,
+                     PVALUE,
+                     EFFECTSIZE,
+                     SE)
+write.table(results,
+            file="FUSION_B_noT2D.tbl",
+            quote = FALSE,
+            row.names = FALSE,
+            col.names = TRUE,
+            sep="\t")
+
+#same but for M
+FUSION_M_noT2D=logit2(FUSION_B_noT2D)
+
+#Create the model with Age as a predictor, and add other covariates
+design=model.matrix(~age_biopsy+sex+bmi+smoke_current+ogtt_status, #adjust for BMI
+                    FUSION_pheno_noT2D)
+
+fit1 <- lmFit(FUSION_M_noT2D, #do the analysis on the M-matrix
+              design)
+fit2 <- eBayes(fit1)
+
+#SE: SE around the slope for age
+#ES:change in methylation per year of age
+#Obtain regression coefficient and p-value for each CpG
+results <- limma::topTable(fit2,
+                           coef="sexM",
+                           number=Inf,
+                           p.value=1)
+#Obtain standard error
+SE <- fit2$sigma * fit2$stdev.unscaled
+
+SE <- SE[rownames(results),"sexM"]
+results <- cbind(results,SE)
+
+
+
+#Save results, need it in a format good for METAL
+CPG <- rownames(results) #name of marker (CpG)
+ALLELE1 <- rep(1,nrow(results)) #fake allele info (not important)
+ALLELE2 <- rep(2,nrow(results)) #fake allele info (not important)
+TESTSTAT <- results$t #t-statistic
+PVALUE <- results$P.Value #p-value
+EFFECTSIZE <- results$logFC #effect size
+SE <- results$SE #standard error
+results = data.frame(CPG,
+                     ALLELE1,
+                     ALLELE2,
+                     TESTSTAT,
+                     PVALUE,
+                     EFFECTSIZE,
+                     SE)
+write.table(results,
+            file="FUSION_noT2D.tbl",
+            quote = FALSE,
+            row.names = FALSE,
+            col.names = TRUE,
+            sep="\t")
+
+#now go do bacon
+library(bacon)
+
+setwd("~/git/git/noT2D_FUSION")
+#List all files ending in "tbl" in the folder
+files <- list.files()[grep(".tbl",list.files())]
+directory="~/git/git/tbls_for_meta/new tbls"
+library(tidyverse)
+
+#Run each file in bacon using a loop
+for (f in files)
+{
+  file <- read_tsv(f) #Read the file
+  f <- sub("\\.tbl", "", f) #Obtain the name of the dataset without the ".tbl" at the end
+  print(f) #show which dataset we are currently analysing
+  bc <- bacon(teststatistics = NULL, #run bacon on effect sizes and standard errors
+              effectsizes = file$EFFECTSIZE,
+              standarderrors = file$SE)
+  #bias and inflation=what it outputs  
+  tiff(paste0('QQ-plot_',f,'.tiff'), #save the graph of raw and adjusted effect sizes and standard errors
+       width =4,
+       height = 2.5,
+       units = 'in',
+       res=600)
+  print(plot(bc, type="qq")) #q-q plot shows the deviation of p-value distribution from null hypothesis. The observed P values for each CpG are sorted from largest to smallest and plotted against expected values from a theoretical ??2-distribution.
+  dev.off()
+  
+  print(c(inflation(bc), #show the inflation factor for this dataset
+          bias(bc))) #show the bias factor for this dataset
+  
+  file$EFFECTSIZE_CORR <- es(bc)[,1] #add a column to the file corresponding to the corrected effect size
+  file$SE_CORR <- se(bc)[,1] #add a column to the file corresponding to the corrected standard error
+  file$PVALUE_CORR <- pval(bc)[,1] #add a column to the file corresponding to the corrected p-value
+  write.table(file, #save the file
+              file=paste0(directory,"/",f,"_corrected.tbl"),
+              quote = FALSE,
+              row.names = FALSE,
+              col.names = TRUE,
+              sep="\t")
+}
+
+#redo all three of those + bacon but for beta values
+#FOR THE BETA VALUES FILE: METAL doesn't like small values and it will round them up to a point that is no longer exploitable, so before you run METAL (just after bacon), multiply the beta-values adjusted effect sizes and standard errors by 100
+setwd("~/git/git/tbls_for_meta/new tbls")
+FUSION_B_noT2D_corrected=read.delim("FUSION_B_noT2D_corrected.tbl")
+FUSION_B_noT2D_corrected$EFFECTSIZE_CORR100=FUSION_B_noT2D_corrected$EFFECTSIZE_CORR*100
+FUSION_B_noT2D_corrected$SE_CORR_100=FUSION_B_noT2D_corrected$SE_CORR*100
+
+write.table(FUSION_B_noT2D_corrected,
+            file="FUSION_B_noT2D_corrected_final.tbl",
+            quote = FALSE,
+            row.names = FALSE,
+            col.names = TRUE,
+            sep="\t")
+
+#done with metal, now load and check if diabetes changes how many DMPs I get..
+#start here when env deletes
+##now go to METAL and input!!!!
+#the corrected values from bacon were used and the meta analysis is complete and I am now uploading it back to git
+setwd("~/git/git")
+META_M_noT2D=read.delim("METAANALYSIS_M_noT2D.TBL")
+META_B_noT2D=read.delim("METAANALYSIS_B_noT2D.TBL")
+
+
+
+#must add t-stat for DMRcate
+t_statistic=META_M_noT2D$Effect/META_M_noT2D$StdErr
+META_M_noT2D$t_stat=t_statistic
+
+#add effect sizes of beta for volcano plot (currently as a percentage, can divide by 100 if want to)
+META_M_noT2D$BetaEffectSize=META_B_noT2D$Effect
+
+#FIRST filter cpgs that are included in 2 or more studies, but dont filter for direction because that would bias the pval adj that im doing next
+#levels(META_M$Direction)
+META_filtered_noT2D=META_M_noT2D[META_M_noT2D$HetDf>=1,]
+
+
+#THEN, adjust the p value with FDR or bonferonni (read online and I think FDR best for this exploratory study)
+FDR=p.adjust(META_filtered_noT2D$P.value, method = "fdr", n = length(META_filtered_noT2D$P.value))
+META_filtered_noT2D$FDR=FDR
+DMPs_noT2D=META_filtered_noT2D[META_filtered_noT2D$FDR<0.005,]
+rownames(DMPs_noT2D)=DMPs_noT2D$MarkerName
+
+#actually get all of the original DMPs and graph those..
+DMPs_noT2D=META_filtered_noT2D[META_filtered$FDR<0.005,]
+rownames(DMPs_noT2D)=DMPs_noT2D$MarkerName
+
+annotation=read.delim('Annotation_2020.txt',header=TRUE)
+rownames(annotation)=annotation$probeID
+
+#add annotation to DMPs
+DMPs_noT2D$"probeID"=DMPs_noT2D$MarkerName
+DMPs_noT2D=left_join(DMPs_noT2D,annotation,by="probeID")
+
+#now graph the DMP effect sizes in a 2D plot, x axis: effext sizes of DMPs from reg analysis, y axis: effect sizes of DMPs from healthy peeps analysis
+Effect_sizes_together=inner_join(DMPs,DMPs_noT2D,by="MarkerName")
+gg=ggplot(Effect_sizes_together, aes(BetaEffectSize.x, BetaEffectSize.y)) +
+  geom_point(aes(color=FDR.y),size=0.1)+
+  scale_color_gradientn(name = "FDR w/o T2D analysis", trans = "log", breaks =  c(0.0000000000000005,0.0005,0.005,0.5),limits = c(0.0000000000000005,0.5),colours=c("red","orange","yellow","black"))+
+  labs(x="% DNAm difference btwn males compared
+       to females (full meta-analysis)",y="% DNAm difference btwn males compared
+       to females (w/o T2D meta-analysis)")+
+  theme_minimal()+
+  labs(color = "FDR w/o T2D 
+      analysis")+
+  geom_vline(xintercept = 0) + geom_hline(yintercept = 0)+
+  theme(legend.title = element_text(size = 8),
+        legend.text = element_text(size = 8))
+
+
+
+tiff("2D plot of eff sizes in full meta vs meta without T2D.tiff",
+     height = 3.5,
+     width = 5,
+     units = "in",
+     res = 600)
+gg
+dev.off()
+
+#with analysis without T2D
+#43,052 DMPs instead of 56,813
+#7,565 DMRs instead of 10,240. 
+#And 810 genes overlapping with GTEx instead of 973 (from DMRs)
+
+
+##BACK TO NORMAL DATA NOT DIABETES DATA.. CONTINUE HERE
+#start here when env deletes
+##now go to METAL and input!!!!
+#the corrected values from bacon were used and the meta analysis is complete and I am now uploading it back to git
+setwd("~/git/study 1")
+META_M=read.delim("METAANALYSIS_M.TBL")
+META_B=read.delim("METAANALYSIS_B.TBL")
+
+
+
+#must add t-stat for DMRcate
+t_statistic=META_M$Effect/META_M$StdErr
+META_M$t_stat=t_statistic
+
+#add effect sizes of beta for volcano plot (currently as a percentage, can divide by 100 if want to)
+META_M$BetaEffectSize=META_B$Effect
+
+#FIRST filter cpgs that are included in 2 or more studies, but dont filter for direction because that would bias the pval adj that im doing next
+#levels(META_M$Direction)
+META_filtered=META_M[META_M$Direction!="-??"&META_M$Direction!="?-?"&META_M$Direction!="?-?"&META_M$Direction!="??-"&META_M$Direction!="??+"&META_M$Direction!="?+?"&META_M$Direction!="+??", ]
+#META_fuckme=META_M[META_M$HetDf>=1,]
+
+
+#THEN, adjust the p value with FDR or bonferonni (read online and I think FDR best for this exploratory study)
+FDR=p.adjust(META_filtered$P.value, method = "fdr", n = length(META_filtered$P.value))
+META_filtered$FDR=FDR
+DMPs=META_filtered[META_filtered$FDR<0.005,]
+rownames(DMPs)=DMPs$MarkerName
+
+setwd("~/git")
+annotation=read.delim('Annotation_2020.txt',header=TRUE)
+rownames(annotation)=annotation$probeID
+
+#add annotation to DMPs
+DMPs$"probeID"=DMPs$MarkerName
+DMPs=left_join(DMPs,annotation,by="probeID")
+
+library(openxlsx)
+write.xlsx(DMPs, "Supplementary table DMPs.xlsx", sheetName = "Sheet1",
+           col.names = TRUE, row.names = TRUE, append = FALSE)
+
+library(readxl)
+results_sex=read_excel("META DMPs_xhybr_filtered.xlsx",col_names = TRUE)
+
+
+#overlap with V8 of Gtex sex DE genes (need to tidy up all of this)
+signif_sb_genes=read.delim("signif.sbgenes.txt")
+signif_sb_genes_muscle=signif_sb_genes[signif_sb_genes$tissue=='Muscle_Skeletal',]
+
+#remove the suffix
+s<-sub("\\..*", "", signif_sb_genes_muscle$gene)
+signif_sb_genes_muscle$ensembl_gene_id=s 
+
+#now, figure out what genes are these ensembl IDs (See this, although figured it out on my own before saw this :) :https://www.biostars.org/p/302441/)
+library(biomaRt)
+# define biomart object
+mart <- useMart(biomart = "ensembl", dataset = "hsapiens_gene_ensembl")
+# query biomart
+results <- getBM(attributes = c("chromosome_name","external_gene_name","ensembl_gene_id"),
+                 filters = "ensembl_gene_id", values = signif_sb_genes_muscle$ensembl_gene_id,
+                 mart = mart)
+#mart version not working
+#mart <- useMart("ENSEMBL_MART_ENSEMBL","hsapiens_gene_ensembl",
+             #   host="www.ensembl.org")
+#mart@host="http://may2012.archive.ensembl.org:80/biomart/martservice"
+#mart = useDataset("hsapiens_gene_ensembl",mart=mart)
+
+#results <- getBM(attributes = c("chromosome_name","external_gene_id","ensembl_gene_id"),
+                # filters = "ensembl_gene_id", values = signif_sb_genes_muscle$ensembl_gene_id,
+                # mart = mart)
+#still not working
+#ensembl <- useMart("ensembl")
+#ensembl = useMart("ensembl",dataset="hsapiens_gene_ensembl")
+#listAttributes(ensembl)
+#results <- getBM(attributes = c("chromosome_name","external_gene_id","ensembl_gene_id"),
+ #                filters = "ensembl_gene_id", values = signif_sb_genes_muscle$ensembl_gene_id,
+#                 mart = mart)
+
+sexDE_anno=dplyr::left_join(signif_sb_genes_muscle,results) #this is the complete annotated sex-biased genes table
+
+#filter out sex biased genes on X chrom!
+sexDE_anno=sexDE_anno %>% filter(chromosome_name!="X") #now 2689 genes on autosomes! 2866 including X chrom!
+length(unique(sexDE_anno$external_gene_name))
+sexDE_anno$effsize=sexDE_anno$effsize*-1 #ffff the reference is males..
+
+#now see how many of the sex biased genes overlap with my DMR genes
+#separate the genes from DMR anno (that are separated by ;)
+library(readxl)
+RR_newGR=read_excel("RR_newGR.xlsx")
+newGR=results.ranges_only[results.ranges_only@elementMetadata$Stouffer <0.005&results.ranges_only@elementMetadata$HMFDR <0.005&results.ranges_only@elementMetadata$Fisher<0.005]
+
+#try filtering DMRs with mean B diff of at least 0.1 (so 10% because my mean diffs are in percentages of beta)
+GR_B_0.5=newGR[abs(newGR$meandiff)>5,]
+RR_GR_B_0.5=as.data.frame(GR_B_0.5)
+
+#RR_only_2_filter[RR_only_2_filter==","]<-";" #dont think this works, try next line bcs there are also commas, theres prob a way to strsplit by 2 things in line below but ok
+newGR$overlapping.genes <- gsub('\\s+', '', newGR$overlapping.genes) # REMOVES WHITE SPACE 
+gsub=gsub(',',';',newGR$overlapping.genes)
+newGR$overlapping.genes=gsub
+DMRgenes=strsplit(as.character(newGR$overlapping.genes),split=";") #there were repeats because after ; there was a space..so remove white space
+
+DMRgenes_unlisted=unlist(DMRgenes)
+DMRgenes_unique=unique(DMRgenes_unlisted) #8,420 genes annotated to DMRs from new results 
+DMR_GTEX_overlap=sexDE_anno[is.element(sexDE_anno$external_gene_name,intersect(sexDE_anno$external_gene_name,DMRgenes_unique)),]
+genes_DMR_GTEX_overlap=unique(DMR_GTEX_overlap$external_gene_name)
+#there are 973 sex-biased genes that overlap with MY DMRs (technically 1133 as one linc is called to two ensembl ids)
+#949 now...?
+
+#checking if same,yuppp :) just a sanity check
+DMPgenes=strsplit(as.character(results_sex$Annotated.gene),split=";")
+DMPgenes_unlisted=unlist(DMPgenes)
+DMPgenes_unique=unique(DMPgenes_unlisted) 
+DMP_GTEX_overlap=sexDE_anno[is.element(sexDE_anno$external_gene_name,intersect(sexDE_anno$external_gene_name,DMPgenes_unique)),]
+genes_DMP_GTEX_overlap=DMP_GTEX_overlap$external_gene_name
+#there are 1732 sex-biased genes that overlap with MY DMPS, technically 1731 (1 not unique lnc)
+
+#fisher test for enrichment of sex-biased genes among DMRs vs non DMRs
+#actually do cpgs in DMRs vs cpgs not in DMRs
+#need to subset DMRs to those below my threshold, then do that line of code to extract cpgs
+newGR=results.ranges_only[results.ranges_only@elementMetadata$Stouffer <0.005&results.ranges_only@elementMetadata$HMFDR <0.005&results.ranges_only@elementMetadata$Fisher<0.005]
+RR_newGR=as.data.frame(newGR)
+allDMRcpgs <- sapply(1:length(newGR), function (x) names(subsetByOverlaps(annotated_only, newGR[x])))
+allDMRcpgs_unlisted=unlist(allDMRcpgs) #34566 cpgs in DMRs
+DMRcpgs_anno=annotation[allDMRcpgs_unlisted,]
+DMRgenes=strsplit(as.character(DMRcpgs_anno$genesUniq),split=";")
+DMRgenes_unlisted=unlist(DMRgenes)
+DMRgenes_unique=unique(DMRgenes_unlisted) 
+DMR_GTEX_overlap=sexDE_anno[is.element(sexDE_anno$external_gene_name,intersect(sexDE_anno$external_gene_name,DMRgenes_unique)),]
+genes_DMR_GTEX_overlap=unique(DMR_GTEX_overlap$external_gene_name) #1118 genes in overlap between cpgs in DMRs and sexbiased gtex out of 10161 total genes annotated to cpgs in DMRs (a little diff than genes annotated to DMRs directly)
+length(DMRgenes_unique)  
+
+allnonDMRcpgs=subset(annotation_overlap_only,!(probeID %in% allDMRcpgs_unlisted))#get the cpgs NOT in DMRs
+nonDMRgenes=strsplit(as.character(allnonDMRcpgs$genesUniq),split=";")
+nonDMRgenes_unlisted=unlist(nonDMRgenes)
+nonDMRgenes_unique=unique(nonDMRgenes_unlisted) 
+nonDMR_GTEX_overlap=sexDE_anno[is.element(sexDE_anno$external_gene_name,intersect(sexDE_anno$external_gene_name,nonDMRgenes_unique)),]
+genes_nonDMR_GTEX_overlap=unique(nonDMR_GTEX_overlap$external_gene_name) #1118 genes in overlap between cpgs in DMRs and sexbiased gtex out of 10161 total genes annotated to cpgs in DMRs (a little diff than genes annotated to DMRs directly)
+length(genes_nonDMR_GTEX_overlap)  #2344 sex biased genes overlap with nonDMR cpgs
+length(nonDMRgenes_unique) #out of 40061 total genes annotation to nonDMR cpgs
+
+genes_anno_to_cpgs_in_DMRs_sb=length(genes_DMR_GTEX_overlap)
+genes_anno_to_cpgs_in_DMRs_not_sb=length(DMRgenes_unique) -length(genes_DMR_GTEX_overlap)
+genes_DMRs=rbind(genes_anno_to_cpgs_in_DMRs_sb,genes_anno_to_cpgs_in_DMRs_not_sb)
+
+genes_anno_to_cpgs_not_in_DMRs_sb=length(genes_nonDMR_GTEX_overlap)
+genes_anno_to_cpgs_not_in_DMRs_not_sb=length(nonDMRgenes_unique) -length(genes_nonDMR_GTEX_overlap)
+genes_non_DMRs=rbind(genes_anno_to_cpgs_not_in_DMRs_sb,genes_anno_to_cpgs_not_in_DMRs_not_sb)
+allcounts=cbind(genes_DMRs,genes_non_DMRs)
+rownames(allcounts)=c("sex-biased genes","non sex-biased genes")
+colnames(allcounts)=c("Number of genes annotated to CpGs in DMRs","Number of genes annotated to CpGs not in DMRs")
+fisher.test(allcounts) #p-value < 2.2e-16, 95 percent confidence interval:1.844152 2.144975,odds ratio 1.989365 
+
+
+#venn of overlapping DMGs with DEGs
+library(VennDiagram)
+
+#remove NAs
+DMRgenes_unique=na.omit(DMRgenes_unique)
+#check if all removed
+sum(is.na(DMRgenes_unique))
+
+#reload DEG_FUSION
+library(openxlsx)
+top.table_noXY=read.xlsx("DEGs FUSION.xlsx")
+
+DEGs_FUSION=unique(top.table_noXY$external_gene_name)
+DEGs_GTEX=unique(sexDE_anno$external_gene_name)
+
+
+venn.diagram(
+  x = list(DMRgenes_unique, DEGs_GTEX,DEGs_FUSION),
+  category.names = c("DMGs",
+                     "DEGs GTEx",
+                     "DEGs FUSION "),
+  filename = "VennD DEGs DMGs FUSION.tiff",
+  output=TRUE,
+  col=c("#440154ff", '#21908dff','#fde725ff'),
+  cex=2,
+  lwd=1.2,
+ fill = c("#440154ff", '#21908dff','#fde725ff'),
+  cat.cex = 1.5,
+  cat.default.pos = "outer",
+  cat.pos = c(-10, 10,180),
+  cat.dist = c(0.05, 0.05,0.05),
+  scaled=FALSE,
+  resolution=600
+)
+
+
+
+#add the number of genes per DMR, not this! DO DMPs per gene!
+library(dplyr)
+library(stringr)
+
+
+#now want to count how many DMPs per gene, first: delete repeating genes, second: choose DMPs and their anno, third: choose from the DMPs the genes that ovrlap gtex, fourth: count!
+#gene smart work? WAIT put how many DMPs per overlapping gene!! WAY BETTER!!! #there are 1732 genes overlapping with DMPs (similar to DMRs, good :)
+#FIRST and SECOND
+#We add the gene names to the results table
+list=strsplit(as.character(annotation$geneNames),split=";")
+unique_and_paste=function(v)
+{
+  v=paste(unique(v),collapse = ";")
+}
+list=lapply(list,unique_and_paste)
+genes=unlist(list)
+genes[genes=="NA"]=NA #In the genes vector, NA have been kept as "NA" (i.e. a character with the letters "N" and "A"). We want the actual NA from R that means "missing data"
+names(genes)=rownames(annotation)
+
+#We add the gene names to the results table
+rownames(DMPs)=DMPs$MarkerName
+CpGs=rownames(DMPs)
+Annotated.gene=genes[CpGs]
+results_sex=cbind(DMPs,Annotated.gene)
+
+#Sarahs code to extract EXACT name of gene by setting boundaries, I will do for DMGs from DMPs for the purpose of averaging ES of DMPs and counting DMPs per gene
+results_sex$Annotated.gene=as.character(results_sex$Annotated.gene)
+DMG = unique(unlist(strsplit(results_sex$Annotated.gene,split=";")))
+DMG = DMG[!is.na(DMG)]
+DMG_multiple = tibble(gene = unlist(strsplit(results_sex$Annotated.gene,split=";")))
+DMG_count <- DMG_multiple %>%
+  group_by(gene) %>%
+  dplyr::summarise(n = n()) %>%
+  arrange(desc(n))
+DMG_count <- na.omit(DMG_count) #this is the table with the DMP counts per gene
+genetolookfor <- paste0("\\b","HDAC4","\\b") #this is to look up a particular gene
+indexgene <- grep(genetolookfor,
+                  results_sex$genesUniq) #this is to index which DMPs those are to that one gene
+
+colnames(DMG_count)=c("external_gene_name","DMPs per gene")
+#combine the num of DMPs per overlapping gene with lsfr and effect size from gtex
+DMPs_per_gtexgene_full=sexDE_anno %>% inner_join(DMG_count,by="external_gene_name")%>%
+  arrange(desc(`DMPs per gene`))  #arrange in order, no longer losing some that are have two annotations, FIXED!! thanks sarah
+
+DMPs_per_gtexgene_trim=DMPs_per_gtexgene_full %>% dplyr::select(external_gene_name,effsize,lfsr,`DMPs per gene`)
+DMPs_per_gtexgene_top10=DMPs_per_gtexgene_trim[1:10,] #for the figure in the paper
+
+genes_interesting=c("FGF2","GRB10","HDAC4","DEPTOR","GGT7","MAML3","CTNNBIP1","GTDC1","ALDH1A1","FOXO3","HOXB6","SIX2")
+DMPs_per_gtexgene_10interesting=DMPs_per_gtexgene_trim[DMPs_per_gtexgene_trim$external_gene_name %in% genes_interesting,]
+
+#add FUSION adj P val and ES, damn shanie you quick
+DMPs_per_gtexgene_10interesting_2= DMPs_per_gtexgene_10interesting %>% inner_join(top.table_noXY,by="external_gene_name") %>% dplyr::select(external_gene_name,effsize,lfsr,`DMPs per gene`,logFC,adj.P.Val)
+#DMPs_per_gtexgene_10interesting_2$effsize=DMPs_per_gtexgene_10interesting_2$effsize*-1 #need to get EFFSIZE in correct reference! If didnt already adjust before... can always double check on gtex portal
+
+#ah wait add max DMP ES
+#get MAX meth of DMPs per gene for my top 10 genes, or for all overlapping genes:
+
+vector_genes=OVERLAPPING_GENES$external_gene_name #just bcs order now diff
+max_int <- c()
+for(i in 1:nrow(OVERLAPPING_GENES)) { 
+  genetolookfor <- paste0("\\b",vector_genes[i],"\\b")
+  indexgene <- grep(genetolookfor,
+                    DMPs$genesUniq)
+  first=max(abs(DMPs[indexgene,"BetaEffectSize"]))
+  max_int<-c(max_int,first)
+}
+#could change the loop so that it then pastes the actual bettaeff size as now its abs valueing them, but need to go and most will be neg, just check on own manually
+comb=cbind(OVERLAPPING_GENES,max_int)
+#add number of DMPs per gene (go to DMR_count code)
+comb2=comb %>% inner_join(DMG_count,by="external_gene_name")
+  
+OVERLAPPING_GENES_final=comb2[,c(7,16,8,3,5,10,14,19,20)]
+colnames(OVERLAPPING_GENES_final)=c("Chromosome","Ensembl gene ID","Gene name","GTEx mRNA Effect Size","GTEx mRNA lfsr","FUSION mRNA Effect Size","FUSION mRNA FDR","Max DMP Effect Size","Number of DMPs per gene")
+#BEAUTIFUL
+
+DMPs_per_gtexgene_10interesting_2$`Maximum methylation effect size (Beta %)`=max_int
+colnames(DMPs_per_gtexgene_10interesting_2)=c("Gene","mRNA effect size (GTEx)","lfsr (GTEx)","DMPs per gene","mRNA effect size (FUSION)","FDR (FUSION)","Max. DMP effect size (beta %)")
+#I think ES is in females... should have already multiplied by -1
+#DMPs_per_gtexgene_10interesting_2$`mRNA effect size (GTEx)`=DMPs_per_gtexgene_10interesting_2$`mRNA effect size (GTEx)`*-1
+
+#average meth over a genes DMPs, but it must be by regions? and locations...? COMPLEX SHIT
+#try simplistic version- is the gene more methylated or less, more expressed or less, ACCORDING TO DMPS!
+#for one gene at a time:
+HDAC4meth=results_sex %>% filter(Annotated.gene=="HDAC4")
+mean(HDAC4meth$Effect)
+GRB10meth=results_sex %>% filter(Annotated.gene=="GRB10")
+mean(GRB10meth$Effect)
+
+PCDHGA3=results_sex %>% filter(Annotated.gene=="PCDHGA3")
+mean(PCDHGA3$Effect)
+mean(results_sex[which(results_sex$Annotated.gene=="HDAC4"),"Effect"])
+mean(results_sex[which(results_sex$Annotated.gene=="PCDHGA3"),"Effect"])
+
+#must do it this way because before just finding ones that are perfectly equal to it!!!!
+genetolookfor <- paste0("\\b","PCDHGA3","\\b") #this is to look up a particular gene
+indexgene <- grep(genetolookfor,
+                  results_sex$Annotated.gene)
+mean(results_sex[indexgene,"BetaEffectSize"])
+
+#get average meth of DMPs per gene for my top 10 genes:
+top_vector_genes=DMPs_per_gtexgene_top10$external_gene_name
+
+#so that I can say in my figure, are the top 10 DMP genes also DMR genes overlapping, probs, just check to make sure
+top_vector_genes[is.element(top_vector_genes,intersect(top_vector_genes,vector_genes_2))] #all appear in FUSION
+#great, also check signs are same
+View(DMR_GTEX_overlap[DMR_GTEX_overlap$ensembl_gene_id=vector_genes[1],])
+
+Means_top <- c()
+for(i in 1:10) { 
+  genetolookfor <- paste0("\\b",top_vector_genes[i],"\\b")
+  indexgene <- grep(genetolookfor,
+                    results_sex$Annotated.gene)
+  first=mean(results_sex[indexgene,"BetaEffectSize"])
+  Means_top<-c(Means_top,first)
+}
+
+
+DMPs_per_gtexgene_top10$`Average methylation effect size (Beta %)`=Means_top
+colnames(DMPs_per_gtexgene_top10)=c("Gene","mRNA effect size (GTEx)","lfsr (GTEx)","DMPs per gene","Average DMPs effect size (Beta %)")
+#I think ES is in females...
+DMPs_per_gtexgene_top10$`mRNA effect size (GTEx)`=DMPs_per_gtexgene_top10$`mRNA effect size (GTEx)`*-1
+
+library(openxlsx)
+write.xlsx(OVERLAPPING_GENES_final, "Supplementary overlapping genes.xlsx", sheetName = "Sheet1",
+           col.names = TRUE, row.names = TRUE, append = FALSE)
+
+OVERLAPPING_GENES_final=read.xlsx("Supplementary overlapping genes.xlsx")
+
+#count number of DMGs that are male biased for GTEx and FUSION
+table(OVERLAPPING_GENES_final$GTEx.mRNA.Effect.Size>0) #for GTEx 169 male biased, 155 female biased
+table(OVERLAPPING_GENES_final$FUSION.mRNA.Effect.Size>0) #for GTEx 165 male biased, 159 female biased
+table(OVERLAPPING_GENES_final$Max.DMP.Effect.Size>0) #324 of 326 
+
+#now check for all, how many are in same direction and how many opposite
+vector_genes=DMPs_per_gtexgene_trim$external_gene_name
+Means <- c()
+for(i in 1:length(vector_genes)) { 
+  genetolookfor <- paste0("\\b",vector_genes[i],"\\b")
+  indexgene <- grep(genetolookfor,
+                    results_sex$Annotated.gene)
+  second=mean(results_sex[indexgene,"BetaEffectSize"])
+  Means<-c(Means,second)
+}
+
+DMPs_per_gtexgene_trim$`Average DMPs effect size (Beta %)`=Means
+colnames(DMPs_per_gtexgene_trim)=c("Gene","mRNA effect size (GTEx)","lfsr (GTEx)","DMPs per gene","Average DMPs effect size (Beta %)")
+#I think ES is in females...
+DMPs_per_gtexgene_trim$`mRNA effect size (GTEx)`=DMPs_per_gtexgene_trim$`mRNA effect size (GTEx)`*-1
+
+library(openxlsx)
+write.xlsx(DMPs_per_gtexgene_trim, "Gtex and Meth overlapping genes.xlsx", sheetName = "Sheet1",
+           col.names = TRUE, row.names = TRUE, append = FALSE)
+
+write.xlsx(RR_newGR, "DMRs.xlsx", sheetName = "DMRs",
+           col.names = TRUE, row.names = TRUE, append = FALSE)
+
+write.xlsx(sexDE_anno, "DMGs GTEx.xlsx", sheetName = "DMGs GTEx",
+           col.names = TRUE, row.names = TRUE, append = FALSE)
+
+write.xlsx(top.table_noXY, "DEGs FUSION.xlsx", sheetName = "DEGs FUSION",
+           col.names = TRUE, row.names = TRUE, append = FALSE)
+
+#and then count how many have pos signs with effect and negative (from sexDE effect vs meth)
+DMPs_per_gtexgene_trim$correlation=(DMPs_per_gtexgene_trim$`mRNA effect size (GTEx)`)*(DMPs_per_gtexgene_trim$`Average DMPs effect size (Beta %)`)
+DMPs_per_gtexgene_trim_final=mutate(DMPs_per_gtexgene_trim,`Methylation & GTEx correlation`=ifelse(DMPs_per_gtexgene_trim$correlation>0,"+","-"))
+table(DMPs_per_gtexgene_trim_final$`Methylation & GTEx correlation`) #  - 983 and  + 749
+
+##now do the same but for DMR just for the numbers of COREELATIONs
+DMG_2 = unique(unlist(strsplit(RR_only_2_filter$better_annotation_2,split=";")))
+DMG_2 = DMG_2[!is.na(DMG_2)]
+DMG_multiple_2 = tibble(gene = unlist(strsplit(RR_only_2_filter$better_annotation_2,split=";")))
+DMG_count_2 <- DMG_multiple_2 %>%
+  group_by(gene) %>%
+  dplyr::summarise(n = n()) %>%
+  arrange(desc(n))
+DMG_count_2 <- na.omit(DMG_count_2)
+
+#now get means
+vector_genes_2=genes_DMR_GTEX_overlap
+Means_2 <- c()
+for(i in 1:length(vector_genes_2)) { 
+  genetolookfor <- paste0("\\b",vector_genes_2[i],"\\b")
+  indexgene <- grep(genetolookfor,
+                    RR_only_2_filter$better_annotation_2)
+  second=mean(RR_only_2_filter[indexgene,"meandiff"])
+  Means_2<-c(Means_2,second)
+}
+
+genes_DMR_GTEX_overlap[duplicated(genes_DMR_GTEX_overlap)] #linc00484 appears twice, 2 ensemble ids are annoted to it
+DMR_GTEX_overlap$`average meandiff`=Means_2
+#I think ES is in females from gtex...
+DMR_GTEX_overlap$effsize=DMR_GTEX_overlap$effsize*-1
+
+
+
+#and then count how many have pos signs with effect and negative (from sexDE effect vs meth)
+DMR_GTEX_overlap$correlation=(DMR_GTEX_overlap$effsize)*(DMR_GTEX_overlap$`average meandiff`)
+DMR_GTEX_overlap=mutate(DMR_GTEX_overlap,`Methylation & GTEx correlation`=ifelse(DMR_GTEX_overlap$correlation>0,"+","-"))
+table(DMR_GTEX_overlap$`Methylation & GTEx correlation`) #  - 651 and  + 483 #linc is twice negatively correlated, so technically 650?
+
+library(openxlsx)
+write.xlsx(DMR_GTEX_overlap, "Gtex and DMR overlapping genes.xlsx", sheetName = "Sheet1",
+           col.names = TRUE, row.names = TRUE, append = FALSE)
+
+DMR_GTEX_overlap=read_excel("Gtex and DMR overlapping genes.xlsx")
+
+#is this how I get the meth for each without averageing ES???
+#do just for one, loop is messed up, but i think is close
+genetolookfor <- paste0("\\b","PCDHGA3","\\b") #this is to look up a particular gene
+indexgene <- grep(genetolookfor,
+                  RR_newGR$better_annotation)
+first=RR_newGR[indexgene,c("meandiff","better_annotation")]
+first$uniqueGene="PCDHGA3"
+
+genetolookfor <- paste0("\\b","GRB10","\\b") #this is to look up a particular gene
+indexgene <- grep(genetolookfor,
+                  RR_newGR$better_annotation)
+second=RR_only_2_filter[indexgene,c("meandiff","better_annotation")]
+second$uniqueGene=paste0("GRB10")
+
+binded=rbind(first,second)
+
+#now for loop...good luck...THIS IS IT ! go me!! this is each DMR, with its sep effect size, to each gene, even ones that are annotated to multiple genes! WOOHOO
+vector_genes_2=genes_DMR_GTEX_overlap
+notmeans <- c()
+for(i in 1:length(vector_genes_2)) { 
+  genetolookfor <- paste0("\\b",vector_genes_2[i],"\\b")
+  indexgene <- grep(genetolookfor,
+                    RR_only_2_filter$better_annotation_2)
+  third=RR_only_2_filter[indexgene,c("meandiff","better_annotation_2")]
+  third$uniqueGene=paste0(vector_genes_2[i])
+  notmeans<-rbind(notmeans,third)
+}
+#now redo next code with this!
+
+#similar to previous code except want a table with DNAm ES vs GTEx ES per DMR
+genes_of_interest=c("GRB10","HDAC4","FGF2","DEPTOR","GGT7","MAML3",
+"CTNNBIP1","GTDC1","ALDH1A1","FOXO3","HOXB6","SIX2")
+
+testing_exprES=sexDE_anno[sexDE_anno$external_gene_name %in% genes_of_interest,]
+testing_exprES$better_annotation_2=testing_exprES$external_gene_name
+testing_DNAmES=RR_only_2_filter[RR_only_2_filter$better_annotation_2 %in% genes_of_interest,]
+
+#try all 1133 genes, ah wait, need to split by ;, see code above SEE LOOP
+testing_exprES=sexDE_anno
+testing_exprES$uniqueGene=testing_exprES$external_gene_name
+#testing_DNAmES=RR_only_2_filter
+
+ES_combined=left_join(notmeans,testing_exprES, by="uniqueGene")
+ES_combined=ES_combined[!is.na(ES_combined$external_gene_name),] #get just the sexbiased genes and their DMRs
+
+#too many points, reduce to top 500 DNAm ES, pick top 500 of absvalue of DNAm ES
+ES_combined_less=ES_combined %>% slice_max(order_by = abs(meandiff), n = 50)
+#try picking top DEGs
+ES_combined_less2=ES_combined %>% slice_max(order_by = abs(effsize), n = 50)
+
+library(scales)
+my.formula=y~x
+
+
+ggplot(ES_combined, aes(meandiff, effsize)) +
+  geom_point(aes(col=better_annotation_2),size=0.8)+
+  labs(x="DNAm effect size (%)",y="GTEx gene expression effect size (%)")+
+  theme_minimal()+
+  theme(legend.position = "none")+
+  geom_smooth(method='lm')+
+  stat_poly_eq(formula = my.formula,
+               aes(label = paste( ..rr.label..)),
+               label.x.npc = "left", label.y.npc = 0.88,
+               parse = TRUE)+
+  scale_x_continuous(breaks = scales::pretty_breaks(n = 5),limits = c(-25,9))+
+  stat_fit_glance(method = 'lm',
+                method.args = list(formula = my.formula),
+                geom = 'text',
+                aes(label = paste("P-value = ", signif(..p.value.., digits = 2), sep = "")),
+                label.x.npc = 'left')
+
+
+
+#test p value of this  p-value: 4.762e-08 (did it separately and got same)
+exp_meth_lm = lm(meandiff ~ effsize, data=ES_combined)
+
+tiff("DNAm vs GTEx effect sizes.tiff",
+     height = 3.5,
+     width = 5,
+     units = "in",
+     res = 600)
+gg
+dev.off()
+
+#add correlation and count for each type of DMR (TSS etc)
+library(IlluminaHumanMethylationEPICanno.ilm10b2.hg19)
+annEPIC <- getAnnotation(IlluminaHumanMethylationEPICanno.ilm10b2.hg19)
+CpG=annEPIC@rownames
+positions=annEPIC@listData$GencodeCompV12_Group
+TSSrelation=annEPIC@listData$UCSC_RefGene_Group
+genenames=annEPIC@listData$UCSC_RefGene_Name
+island_stat=annEPIC@listData$Relation_to_Island
+
+TSSness=data.frame(TSSrelation,CpG,genenames,positions,island_stat)
+rownames(TSSness)=TSSness$CpG
+#TSSness$probeID=rownames(TSSness)
+
+#one DMR
+DMRnumb=1
+cpgs=names(subsetByOverlaps(annotated_only, results.ranges_only_0.005[1]))
+DMR_TSSness=TSSness[cpgs,]
+DMR_TSSness_unlisted=unlist(strsplit(as.character(DMR_TSSness$TSSrelation),split=";"))
+DMR_TSSs=unique(DMR_TSSness_unlisted)
+DMR_TSS_concat=knitr::combine_words(DMR_TSSs)
+
+DMR_genename_unlisted=unlist(strsplit(as.character(DMR_TSSness$genenames),split=";"))
+DMR_genenames=unique(DMR_genename_unlisted)
+DMR_genenames_concat=knitr::combine_words(DMR_genenames)
+
+DMR_island_unlisted=unlist(strsplit(as.character(DMR_TSSness$island_stat),split=";"))
+DMR_islands=unique(DMR_island_unlisted)
+DMR_island_concat=knitr::combine_words(DMR_islands)
+
+
+full_DMR=cbind(DMRnumb,DMR_TSS_concat,DMR_genenames_concat,DMR_island_concat)
+
+#second DMR manual
+DMRnumb=2
+cpgs2=names(subsetByOverlaps(annotated_only, results.ranges_only_0.005[2]))
+DMR_TSSness2=TSSness[cpgs2,]
+DMR_TSSness_unlisted2=unlist(strsplit(as.character(DMR_TSSness2$TSSrelation),split=";"))
+DMR_TSSs2=unique(DMR_TSSness_unlisted2)
+DMR_TSS_concat2=knitr::combine_words(DMR_TSSs2)
+
+DMR_genename_unlisted2=unlist(strsplit(as.character(DMR_TSSness2$genenames),split=";"))
+DMR_genenames2=unique(DMR_genename_unlisted2)
+DMR_genenames_concat2=knitr::combine_words(DMR_genenames2)
+
+DMR_island_unlisted2=unlist(strsplit(as.character(DMR_TSSness2$island_stat),split=";"))
+DMR_islands2=unique(DMR_island_unlisted2)
+DMR_island_concat2=knitr::combine_words(DMR_islands2)
+
+full_DMR2=cbind(DMRnumb,DMR_TSS_concat2,DMR_genenames_concat2,DMR_island_concat2)
+
+#try to make df where its just DMR# and DMRstati combined for 2 DMRs
+DMR_stati=rbind(full_DMR,full_DMR2)
+
+#if there is nothing there, must write null
+cpgs2=names(subsetByOverlaps(annotated_only, results.ranges_only_0.005[4]))
+DMR_TSSness2=TSSness[cpgs2,]
+DMR_TSSness_unlisted2=unlist(strsplit(as.character(DMR_TSSness2$TSSrelation),split=";"))
+DMR_TSSs2=unique(DMR_TSSness_unlisted2)
+DMR_TSS_concat2=knitr::combine_words(DMR_TSSs2)
+if (length(DMR_TSS_concat2)==0) {
+  DMR_TSS_concat2=print("NULL")
+  }
+
+
+
+#now make loop...
+#for only TSSness
+DMR_statii=c()
+for (i in 1:5){
+  cpgs=names(subsetByOverlaps(annotated_only, results.ranges_only_0.005[i]))
+  DMR_TSSness=TSSness[cpgs,]
+  DMR_TSSness_unlisted=unlist(strsplit(as.character(DMR_TSSness$TSSrelation),split=";"))
+  DMR_TSSs=unique(DMR_TSSness_unlisted)
+  DMR_TSS_concat=knitr::combine_words(DMR_TSSs)
+  DMR_statii=rbind(DMR_statii,DMR_TSS_concat)
+  
+}
+
+#for genes, TSSness, and cgi status
+DMR_statii=c()
+for (i in 1:length(results.ranges_only_0.005)){
+  DMRnumb=i
+  cpgs=names(subsetByOverlaps(annotated_only, results.ranges_only_0.005[i]))
+  DMR_TSSness=TSSness[cpgs,]
+  DMR_TSSness_unlisted=unlist(strsplit(as.character(DMR_TSSness$TSSrelation),split=";"))
+  DMR_TSSs=unique(DMR_TSSness_unlisted)
+  DMR_TSS_concat=knitr::combine_words(DMR_TSSs)
+  if (length(DMR_TSS_concat)==0) {
+    DMR_TSS_concat=print("NULL")
+  }
+  
+  DMR_genename_unlisted=unlist(strsplit(as.character(DMR_TSSness$genenames),split=";"))
+  DMR_genenames=unique(DMR_genename_unlisted)
+  DMR_genenames_concat=knitr::combine_words(DMR_genenames)
+  if (length(DMR_genenames_concat)==0) {
+    DMR_genenames_concat=print("NULL")
+  }
+  
+  DMR_island_unlisted=unlist(strsplit(as.character(DMR_TSSness$island_stat),split=";"))
+  DMR_islands=unique(DMR_island_unlisted)
+  DMR_island_concat=knitr::combine_words(DMR_islands)
+  if (length(DMR_island_concat)==0) {
+    DMR_island_concat=print("NULL")
+  }
+  
+  full_DMR=cbind(DMRnumb,DMR_TSS_concat,DMR_genenames_concat,DMR_island_concat)
+  DMR_statii=rbind(DMR_statii,full_DMR)
+}
+
+DMR_statii_df=data.frame(DMR_statii)
+
+#try to make df where its just DMR# and DMRstati combined for 2 DMRs
+DMR_stati=rbind(full_DMR,full_DMR2)
+
+
+#do the same loop but for our annotation to get enhancers etc
+#one DMR
+DMRnumb=1
+cpgs=names(subsetByOverlaps(annotated_only, newGR[1]))
+DMR_chromstateness=annotation[cpgs,c("genesUniq","E107","E108")]
+DMR_chromstateness107_unlisted=unlist(strsplit(as.character(DMR_chromstateness$E107),split=";"))
+DMR_states107=unique(DMR_chromstateness107_unlisted)
+DMR_states_concat107=knitr::combine_words(DMR_states107,sep = ";",and=";")
+
+
+DMR_chromstateness108_unlisted=unlist(strsplit(as.character(DMR_chromstateness$E108),split=";"))
+DMR_states108=unique(DMR_chromstateness108_unlisted)
+DMR_states_concat108=knitr::combine_words(DMR_states108,sep = ";",and=";")
+
+DMR_genename_unlisted=unlist(strsplit(as.character(DMR_chromstateness$genesUniq),split=";"))
+DMR_genenames=unique(DMR_genename_unlisted)
+DMR_genenames_concat=knitr::combine_words(DMR_genenames,sep = ";",and=";")
+
+full_DMR=cbind(DMRnumb,DMR_states_concat107,DMR_states_concat108,DMR_genenames_concat)
+
+#second DMR
+DMRnumb=2
+cpgs=names(subsetByOverlaps(annotated_only, results.ranges_only_0.005[2]))
+DMR_chromstateness=annotation[cpgs,c("genesUniq","E107","E108")]
+DMR_chromstateness107_unlisted=unlist(strsplit(as.character(DMR_chromstateness$E107),split=";"))
+DMR_states107=unique(DMR_chromstateness107_unlisted)
+DMR_states_concat107=knitr::combine_words(DMR_states107,sep = ";",and=";")
+
+
+DMR_chromstateness108_unlisted=unlist(strsplit(as.character(DMR_chromstateness$E108),split=";"))
+DMR_states108=unique(DMR_chromstateness108_unlisted)
+DMR_states_concat108=knitr::combine_words(DMR_states108,sep = ";",and=";")
+
+DMR_genename_unlisted=unlist(strsplit(as.character(DMR_chromstateness$genesUniq),split=";"))
+DMR_genenames=unique(DMR_genename_unlisted)
+DMR_genenames_concat=knitr::combine_words(DMR_genenames,sep = ";",and=";")
+
+full_DMR2=cbind(DMRnumb,DMR_states_concat107,DMR_states_concat108,DMR_genenames_concat)
+
+DMR_chromstati=rbind(full_DMR,full_DMR2)
+
+#oops add meandiff!!
+meandiff=newGR$meandiff[1]
+
+#now loop
+DMR_chromstatii=c()
+for (i in 1:length(newGR)){
+  DMRnumb=i
+  cpgs=names(subsetByOverlaps(annotated_only, newGR[i]))
+  DMR_chromstateness=annotation[cpgs,c("genesUniq","E107","E108")]
+  DMR_chromstateness107_unlisted=unlist(strsplit(as.character(DMR_chromstateness$E107),split=";"))
+  DMR_states107=unique(DMR_chromstateness107_unlisted)
+  DMR_states_concat107=knitr::combine_words(DMR_states107,sep = ";",and=";")
+  if (length(DMR_states_concat107)==0) {
+    DMR_TSS_concat="NULL"
+  }
+  
+  DMR_chromstateness108_unlisted=unlist(strsplit(as.character(DMR_chromstateness$E108),split=";"))
+  DMR_states108=unique(DMR_chromstateness108_unlisted)
+  DMR_states_concat108=knitr::combine_words(DMR_states108,sep = ";",and=";")
+  if (length(DMR_states_concat108)==0) {
+    DMR_genenames_concat="NULL"
+  }
+  
+  DMR_genename_unlisted=unlist(strsplit(as.character(DMR_chromstateness$genesUniq),split=";"))
+  DMR_genenames=unique(DMR_genename_unlisted)
+  DMR_genenames_concat=knitr::combine_words(DMR_genenames,sep = ";",and=";")
+  if (length(DMR_genenames_concat)==0) {
+    DMR_genenames_concat="NULL"
+  }
+  
+  meandiff=newGR$meandiff[i]
+  full_DMR=cbind(DMRnumb,DMR_states_concat107,DMR_states_concat108,DMR_genenames_concat,meandiff)
+  DMR_chromstatii=rbind(DMR_chromstatii,full_DMR)
+}
+
+DMR_chromstatii_df=data.frame(DMR_chromstatii)
+
+#split the genes
+library(tidyr)
+DMR_chromstatii_split=separate_rows(DMR_chromstatii_df,DMR_genenames_concat)
+
+#now combine this with GTEX ES and FUSION FC
+colnames(DMR_chromstatii_split)=c("DMRnumb","DMR_states_concat107","DMR_states_concat108","external_gene_name","meandiff")
+
+directionality=left_join(DMR_chromstatii_split,top.table_noXY)
+directionality=left_join(directionality,sexDE_anno,by="external_gene_name")
+
+#graph the Enh and EnhG ones
+directionality_enh=directionality[grepl("Enh",directionality$DMR_states_concat107)|
+                                    grepl("EnhG",directionality$DMR_states_concat107)|
+                                       grepl("Enh",directionality$DMR_states_concat108)|
+                                       grepl("EnhG",directionality$DMR_states_concat108),] #must be a much prettier way of doing this but oh well
+#if need to drop NAs
+directionality_enh=directionality_enh %>% drop_na(effsize)
+#directionality_enh=directionality_enh %>% drop_na(logFC)#for FUSION
+
+#same but for TSSA and TSSA flank
+directionality_prom=directionality[grepl("TssA",directionality$DMR_states_concat107)|
+                                    grepl("TssAFlnk",directionality$DMR_states_concat107)|
+                                    grepl("TssA",directionality$DMR_states_concat108)|
+                                    grepl("TssAFlnk",directionality$DMR_states_concat108),] #must be a much prettier way of doing this but oh well
+
+directionality_prom=directionality_prom %>% drop_na(effsize)#for GTEx
+#directionality_prom=directionality_prom %>% drop_na(logFC)#for FUSION
+
+#graph
+library(ggpmisc)
+directionality_prom$meandiff=as.numeric(directionality_prom$meandiff)#ahhh they were characters not numberics!!
+directionality_enh$meandiff=as.numeric(directionality_enh$meandiff)
+
+ggplot(directionality_enh, aes(meandiff, effsize)) +
+  geom_point(aes(col=external_gene_name),size=0.3)+
+  labs(x="DNAm effect size of Enh+EnhG (%)",y="GTEx gene expression effect size (%)")+
+  theme_minimal()+
+  theme(legend.position = "none")+
+  geom_smooth(method='lm')+
+ # scale_x_continuous(limits=c(-30, 30))+
+  geom_vline(xintercept = 0) + geom_hline(yintercept = 0)+
+  stat_poly_eq(formula = my.formula,
+               aes(label = paste( ..rr.label..)),
+               label.x.npc = "left", label.y.npc = 0.88,
+               parse = TRUE)+
+  stat_fit_glance(method = 'lm',
+                  method.args = list(formula = my.formula),
+                  geom = 'text',
+                  aes(label = paste("P-value = ", signif(..p.value.., digits = 2), sep = "")),
+                  label.x.npc = 'left')+
+  scale_x_continuous(breaks = scales::pretty_breaks(n = 5),limits = c(-25,9))
+
+#colors by quadrants
+directionality_prom=directionality_prom[,-6] #there was no column name and so it wouldnt make a tbl, need a tbl to mutate
+directionality_prom=as_tibble(directionality_prom)
+prom_quad=directionality_prom %>% 
+  mutate(quadrant=case_when(meandiff>0 & effsize>0 ~ "Q1",
+                            meandiff<0 & effsize>0 ~ "Q2",
+                            meandiff<0 & effsize<0 ~ "Q3",
+                            meandiff>0 & effsize<0 ~ "Q4")) 
+#now quad graph
+g=ggplot(enh_quad, aes(meandiff, effsize)) +
+  geom_point(aes(col=quadrant),size=0.3)+
+  labs(x="DNAm effect size of DMRs in enhancers (%)",y="GTEx gene expression effect size")+
+  theme_minimal()+
+  theme(legend.position = "none")+
+  #geom_smooth(method='lm')+
+  # scale_x_continuous(limits=c(-30, 30))+
+  geom_vline(xintercept = 0) + geom_hline(yintercept = 0)
+  #stat_poly_eq(formula = my.formula,
+   #            aes(label = paste( ..rr.label..)),
+    #           label.x.npc = "left", label.y.npc = 0.88,
+     #          parse = TRUE)+
+  #stat_fit_glance(method = 'lm',
+   #               method.args = list(formula = my.formula),
+    #              geom = 'text',
+     #             aes(label = paste("P-value = ", signif(..p.value.., digits = 2), sep = "")),
+      #            label.x.npc = 'left')+
+  scale_x_continuous(breaks = scales::pretty_breaks(n = 5),limits = c(-25,9))
+
+#same with enh
+directionality_enh=directionality_enh[,-6] #there was no column name and so it wouldnt make a tbl, need a tbl to mutate
+directionality_enh=as_tibble(directionality_enh)
+enh_quad=directionality_enh %>% 
+  mutate(quadrant=case_when(meandiff>0 & effsize>0 ~ "Q1",
+                            meandiff<0 & effsize>0 ~ "Q2",
+                            meandiff<0 & effsize<0 ~ "Q3",
+                            meandiff>0 & effsize<0 ~ "Q4"))
+nrow(filter(enh_quad, quadrant == "Q1"))/nrow(enh_quad)*100 #2.6%
+nrow(filter(enh_quad, quadrant == "Q2"))/nrow(enh_quad)*100 #55%
+nrow(filter(enh_quad, quadrant == "Q3"))/nrow(enh_quad)*100 #38%
+nrow(filter(enh_quad, quadrant == "Q4"))/nrow(enh_quad)*100 #4%
+
+nrow(filter(prom_quad, quadrant == "Q1"))/nrow(prom_quad)*100 #1%
+nrow(filter(prom_quad, quadrant == "Q2"))/nrow(prom_quad)*100 #57%
+nrow(filter(prom_quad, quadrant == "Q3"))/nrow(prom_quad)*100 #36%
+nrow(filter(prom_quad, quadrant == "Q4"))/nrow(prom_quad)*100 #5%
+
+g=ggplot(enh_quad, aes(meandiff, effsize)) +
+  geom_point(aes(fill="black"),size=0.3)+
+  labs(x="DNAm effect size of DMRs in enhancers (%)",y="GTEx mRNA effect size")+
+  theme_minimal()+
+  theme(legend.position = "none")+
+  #geom_smooth(method='lm')+
+  # scale_x_continuous(limits=c(-30, 30))+
+  geom_vline(xintercept = 0) + geom_hline(yintercept = 0)+
+  #stat_poly_eq(formula = my.formula,
+   #            aes(label = paste( ..rr.label..)),
+    #           label.x.npc = "left", label.y.npc = 0.88,
+     #          parse = TRUE)+
+  #stat_fit_glance(method = 'lm',
+   #               method.args = list(formula = my.formula),
+    #              geom = 'text',
+     #             aes(label = paste("P-value = ", signif(..p.value.., digits = 2), sep = "")),
+      #            label.x.npc = 'left')+
+  scale_x_continuous(breaks = scales::pretty_breaks(n = 5),limits = c(-25,9))+
+  geom_rect(fill = "#B3E2CD", xmin = -Inf, xmax = 0, ymin =0, ymax = Inf, alpha =0.02)+
+  geom_rect(fill = "#CBD5E8", xmin = -0, xmax = Inf, ymin =0, ymax = Inf, alpha =0.04)+
+  geom_rect(fill = "#E6F5C9", xmin = 0, xmax = Inf, ymin =-Inf, ymax = 0, alpha =0.02)+
+  geom_rect(fill =  "#FFF2AE", xmin = -Inf, xmax = 0, ymin =-Inf, ymax = 0, alpha =0.01)
+  
+#looks ugly go with quadrant points colored for now  
+
+
+tiff("Quadrant plot enhancers.tiff",
+     height = 3,
+     width = 4,
+     units = "in",
+     res = 600)
+g
+dev.off()
+
+#check on own
+lm(meandiff ~ effsize, data=directionality_prom)
+lm(meandiff ~ effsize, data=directionality_enh)
+
+#check number of pos and neg correlations
+directionality_prom$correlation=directionality_prom$effsize*as.numeric(directionality_prom$meandiff)
+prop.table(table(directionality_prom$correlation>0)) #got it!
+#62.3% have neg corr for promoters GTEx, 58.4% for FUSION
+
+directionality_enh$correlation=directionality_enh$effsize*as.numeric(directionality_enh$meandiff)
+prop.table(table(directionality_enh$correlation>0)) #59% for GTEx, 59.7% for FUSION
+
+
+#check fusion out of curiosity, but must change which nas are dropped above first
+directionality_prom$correlation=directionality_prom$logFC*as.numeric(directionality_prom$meandiff)
+prop.table(table(directionality_prom$correlation>0)) #got it! 58.41969%
+
+
+directionality_enh$correlation=directionality_enh$logFC*as.numeric(directionality_enh$meandiff)
+prop.table(table(directionality_enh$correlation>0)) #59.71223%
+
+#something is weird with the x axis in the dot plot
+ggdotplot(data=directionality_enh, x='meandiff', y='effsize',
+          xlab="GTEx Effect Size", ylab='DNAm Effect size for Enh DMRs',
+          panel.labs.font = list(size = 12))+
+  theme(axis.text.x = element_text(size=12),
+        axis.text.y = element_text(size=12))+
+  font("xy", size=12)+
+  rremove("legend")+
+  rremove("x.text")+
+  rremove("x.ticks")
+
+#make a loop for 1000 permutations of shuffling the values and counting the proportions
+directionality_enh$shuffled=sample(directionality_enh$meandiff, replace=FALSE)
+directionality_enh$correlationshuff=directionality_enh$effsize*as.numeric(directionality_enh$shuffled)
+corr_prop=data.frame(prop.table(table(directionality_enh$correlationshuff>0))) #got it!          
+corr_prop=corr_prop[,-1]
+
+directionality_enh$shuffled=sample(directionality_enh$meandiff, replace=FALSE)
+directionality_enh$correlationshuff=directionality_enh$effsize*as.numeric(directionality_enh$shuffled)
+corr_prop2=data.frame(prop.table(table(directionality_enh$correlationshuff>0))) #got it!  
+corr_prop2=corr_prop2[,-1]
+
+corr_props=cbind(corr_prop,corr_prop2)
+
+#now for the loop
+corr_props=c()
+for (i in 1:10000){
+  directionality_enh$shuffled=sample(directionality_enh$meandiff, replace=FALSE)
+  directionality_enh$correlationshuff=directionality_enh$effsize*as.numeric(directionality_enh$shuffled)
+  corr_prop=data.frame(prop.table(table(directionality_enh$correlationshuff>0)))
+  corr_prop=corr_prop[,-1]
+  
+  corr_props=cbind(corr_props,corr_prop)
+}
+
+#plot histogram (enh)
+corr_props_t=data.frame(t(corr_props))
+corr_props_t$Negative_correlation=corr_props_t$X1*100
+g=ggplot(corr_props_t,aes(`Negative_correlation`))+
+  geom_histogram(bins=10,col=I("black"),breaks=seq(50,60,by=0.5))+
+  geom_vline(xintercept=59.71223, linetype="dashed", 
+             color = "red", size=0.5)+
+  theme_minimal()+
+  xlab("% of enhancer DMRs and DEGs that are inversely correlated")
+
+#calculate p value
+prop.table(table(directionality_enh$correlation<0)) #59.10781 for GTex, 
+prop.table(table(corr_props_t$Negative_correlation>=59.10781)) 
+which(corr_props_t$Negative_correlation>=59.10781) #none
+
+#now do same but for prom
+corr_props=c()
+for (i in 1:10000){
+  directionality_prom$shuffled=sample(directionality_prom$meandiff, replace=FALSE)
+  directionality_prom$correlationshuff=directionality_prom$effsize*as.numeric(directionality_prom$shuffled)
+  corr_prop=data.frame(prop.table(table(directionality_prom$correlationshuff>0)))
+  corr_prop=corr_prop[,-1]
+  
+  corr_props=cbind(corr_props,corr_prop)
+}
+
+#plot histogram (prom)
+prop.table(table(directionality_prom$correlation<0)) #62.32339% for GTex, 58.41969  for FUSION
+corr_props_t=data.frame(t(corr_props))
+corr_props_t$Negative_correlation=corr_props_t$X1*100
+g=ggplot(corr_props_t,aes(`Negative_correlation`))+
+  geom_histogram(bins=10,col=I("black"),breaks=seq(50,60,by=0.5))+
+  geom_vline(xintercept=62.32339, linetype="dashed", 
+             color = "red", size=0.5)+
+  theme_minimal()+
+  xlab("% of promoter DMRs and DEGs that are inversely correlated")
+
+tiff("10,000 perm enh regions_GTEx.tiff",
+     height = 3,
+     width = 5,
+     units = "in",
+     res = 600)
+g
+dev.off()
+
+#calculate p value
+prop.table(table(corr_props_t$Negative_correlation>=59.10781)) 
+which(corr_props_t$Negative_correlation>=59.10781)
+
+#to do the same for FUSION just go back and change it to drop NAs from logFC instead of ES
+
+#number of genes enriched in females in GTEx and FUSION
+prop.table(table(top.table_noXY$logFC>0)) 
+prop.table(table(sexDE_anno$effsize>0)) 
+
+#convert logFC to FC for reporting
+top.table_noXY$fold_change=2^top.table_noXY$logFC
+
+#all options of TSSness
+optionsTSS=strsplit(as.character(TSSness$TSSrelation),split=";")
+optionsTSS=unlist(optionsTSS)
+unique(optionsTSS) #options are TSS200, TSS1500, body, 1st exon, 5'UTR, 3'UTR, Exonbnd (exon boundaries)
+
+
+#Sarahs code for how to count exact DMG instead of SLCA1 and SLCA1-3 both being counted as SLCA1
+#results_sex=results_sex %>% 
+ # rename(`Annotated gene(s)`="Annotated.gene"
+  #)
+#results_sex$`Annotated gene(s)`=as.character(results_sex$`Annotated gene(s)`)
+DMG = unique(unlist(strsplit(DMRs$`Annotated gene(s)`,split=";")))
+DMG = DMG[!is.na(DMG)]
+DMG_multiple = tibble(gene = unlist(strsplit(DMRs$`Annotated gene(s)`,split=";")))
+DMG_count <- DMG_multiple %>%
+  group_by(gene) %>%
+  dplyr::summarise(n = n()) %>%
+  arrange(desc(n))
+DMG_count <- na.omit(DMG_count)
+genetolookfor <- paste0("\\b",input$gene,"\\b")
+indexgene <- grep(genetolookfor,
+                  meta_res_robust$`Annotated gene(s)`)
+
+
+#from here for  dmrcate and goregion, one THAT WORKS!
+library(limma)
+library(DMRcate)
+library(IRanges)
+CpGs2<-rownames(META_filtered) #for DMRs only with sex not interaction with exercise
+rownames(META_filtered)=as.character(META_filtered$MarkerName)
+annotation_overlap_only=annotation[is.element(annotation$probeID,intersect(annotation$probeID,rownames(META_filtered))),]
+
+library(dplyr)
+META_filtered$cpg=rownames(META_filtered)
+META_filtered=arrange(META_filtered,cpg)
+rownames(META_filtered)=as.character(META_filtered$MarkerName)
+
+annotation_overlap_only_2=arrange(annotation_overlap_only,probeID)
+
+
+#We need to create a "CpGannotated" object to be used in dmrcate
+annotated_only <- GRanges(as.character(annotation_overlap_only_2$CpG_chrm), #chromosome
+                          IRanges(start=c(annotation_overlap_only_2$CpG_beg),end=c(annotation_overlap_only_2$CpG_end)), #position on chromosome
+                          stat = META_filtered$t_stat, #t-statistic
+                          diff = META_filtered$BetaEffectSize, #effect size
+                          ind.fdr = META_filtered$FDR, #adjusted p-value
+                          is.sig = META_filtered$FDR < 0.005) #p-value threshold
+
+
+names(annotated_only) <- annotation_overlap_only_2$probeID
+
+annotated_only <- sort(annotated_only)
+annotated_only_Canno <- new("CpGannotated",
+                            ranges = annotated_only) #create a "CpGannotated" object to be
+#used in dmrcate
+
+DMR_only <- dmrcate(annotated_only_Canno,
+                    C=2,
+                    min.cpgs = 2,
+                    lambda=1000) #minimum number of CpGs for a region to be a DMR
+
+#Obtain results
+results.ranges_only <- extractRanges(DMR_only,
+                                     genome = "hg38") #2009 annotation of the human genome was hg19 and the 2013 annotation is hg38
+
+RR_only <-as.data.frame (results.ranges_only)
+
+
+#OUR own annotation for each CpG
+library(IlluminaHumanMethylationEPICanno.ilm10b2.hg19)
+META_matrix=as.matrix(META_filtered)
+RSobject <- RatioSet(META_matrix, annotation = c(array = "IlluminaHumanMethylationEPIC",
+                                                 annotation = "ilm10b2.hg19"))
+RSanno <- getAnnotation(RSobject)[, c("chr", "pos", "Name",
+                                      "UCSC_RefGene_Name","UCSC_RefGene_Group")]
+
+#Change annotation with our annotation
+RSanno$pos <- annotation[rownames(META_filtered),"CpG_beg"] #Change hg19 position to hg38 position
+RSanno$UCSC_RefGene_Name <- annotation[rownames(RSanno),"genesUniq"] #Change gene names
+genes <- as.character(RSanno$UCSC_RefGene_Name)
+genes[which(is.na(genes))] <- "" #replace NAs with ""
+RSanno$UCSC_RefGene_Name <- genes #Give Gene names
+RSanno$UCSC_RefGene_Group <- genes
+
+#Obtain better annotation of the DMRs (from previous code)
+annotation_GR <- makeGRangesFromDataFrame(annotation,
+                                          keep.extra.columns=TRUE,
+                                          ignore.strand=FALSE,
+                                          seqinfo=NULL,
+                                          seqnames.field=c("CpG_chrm"),
+                                          start.field="CpG_beg",
+                                          end.field=c("CpG_end"),
+                                          strand.field="probe_strand",
+                                          starts.in.df.are.0based=FALSE)
+genesidx <- as.data.frame(findOverlaps(results.ranges_only, annotation_GR))
+genesover <- tapply(genesidx$subjectHits, genesidx$queryHits,
+                    function(x) annotation_GR$genesUniq_with_enh[x])
+op.A <- sapply(genesover, function(l) paste(unique(unlist(strsplit(as.character(l),split=";"))), collapse = ";"))
+name.A <- names(genesover)
+m.A <- as.numeric(name.A)
+M <- length(results.ranges_only)
+better_annotation <- rep("", M)
+better_annotation[m.A] <- op.A
+#Change to tibble and format
+#results.ranges_onlyy <- as_tibble(results.ranges_only)
+#results.ranges_only$better_annotation <- better_annotation
+#results.ranges_0.005 <- results.ranges_only%>%
+ # dplyr::filter(Fisher<0.005)
+
+#RR_only_2 <-as.data.frame (results.ranges_onlyy)
+
+results.ranges_only$overlapping.genes=better_annotation
+newGR=results.ranges_only[results.ranges_only@elementMetadata$Stouffer <0.005&results.ranges_only@elementMetadata$HMFDR <0.005&results.ranges_only@elementMetadata$Fisher<0.005]
+
+
+#goregion
+library(missMethyl)
+gst_DMRs<-goregion(
+  newGR,
+  all.cpg = rownames(META_filtered),
+  collection = "GO",
+  array.type = "EPIC",
+  plot.bias = TRUE,
+  prior.prob = TRUE,
+  anno = RSanno,
+  equiv.cpg = TRUE,
+  fract.counts = TRUE,
+  sig.genes = TRUE
+)
+
+SigGenesInSet=unlist(strsplit(gsaREACTOME["R-HSA-397014","SigGenesInSet"], ","))
+Reactome_genes_overlap_overlapping=DMPs_per_gtexgene_trim[DMPs_per_gtexgene_trim$external_gene_name %in% genes_interesting,]
+
+#run goregion on hyper and hypo seperately, no difference, to unbalanced
+hypo_RR=newGR[newGR$meandiff<0,]
+hypo_RR_df=as.data.frame(hypo_RR)
+hyper_RR=newGR[newGR$meandiff>0,]
+hyper_RR_df=as.data.frame(hyper_RR)
+
+gst_KEGG=goregion(
+  newGR,
+  all.cpg = rownames(META_filtered),
+  collection = "KEGG",
+  array.type = "EPIC",
+  plot.bias = TRUE,
+  prior.prob = TRUE,
+  anno = RSanno,
+  equiv.cpg = TRUE,
+  fract.counts = TRUE,
+  sig.genes = TRUE
+)
+
+gst_KEGG_0.05=goregion(
+  GR_B_0.5,
+  all.cpg = rownames(META_filtered),
+  collection = "KEGG",
+  array.type = "EPIC",
+  plot.bias = TRUE,
+  prior.prob = TRUE,
+  anno = RSanno,
+  equiv.cpg = TRUE,
+  fract.counts = TRUE,
+  sig.genes = TRUE
+)
+
+
+#look at genes in cushing syndrome for discussion
+cushing=c("CDK4,CDK6,CDKN1B,CDKN2A,APC2,ADCY1,ADCY2,ADCY3,WDR5,ADCY5,ADCY6,FZD10,ADCY7,ADCY8,ADCY9,ATF6B,CRHR1,CRHR2,CREB3L4,CYP11A1,DVL3,E2F2,E2F3,EGFR,ADCY4,PLCB1,AIPL1,NR5A1,GNA11,GNAI1,GNAI2,GNAQ,GNAS,NR4A1,APC,ITPR1,ITPR2,KCNK2,KCNK3,LDLR,ARNT,PBX1,PDE11A,LEF1,PDE8A,RASD1,PLCB2,PLCB3,PLCB4,POMC,PRKACA,MAP2K1,MAP2K2,MRAP,NCEH1,CCND1,CREB3L2,STAR,TCF7,TCF7L2,WNT1,WNT3,WNT5A,WNT6,WNT7A,WNT7B,WNT10B,WNT11,WNT2B,WNT9A,WNT9B,CACNA1C,FZD5,ARMC5,WNT10A,KMT2D,WNT5B,CAMK2A,CAMK2B,CAMK2D,CAMK2G,AXIN1,AXIN2,FZD4,FZD7,FZD9,TCF7L1,ORAI1,CACNA1I,CACNA1H,CACNA1G,WNT3A,CCNE1,CREB3L1,CCNE2,SCARB1,CREB5
+")
+#split up everything by comma
+cushing = unique(unlist(strsplit(cushing,split=",")))
+
+
+#run gsameth on DEGs
+allDMRcpgs_unlisted=unlist(allDMRcpgs)
+#convert ensembl ID to entrez ID
+library(biomaRt)
+mart <- useMart("ensembl", dataset = "hsapiens_gene_ensembl")
+
+## Ensembl IDs of interest
+ensembles <- sexDE_anno$ensembl_gene_id
+
+## Run biomaRt query
+entrezs <- getBM(filters = "ensembl_gene_id", 
+                        attributes = c("ensembl_gene_id", "entrezgene_id"),
+                        values = ensembles, 
+                        mart = mart)
+
+
+gsa_hypergeo_enrich=gsameth(sig.cpg=allDMRcpgs_unlisted,
+  all.cpg = rownames(META_filtered),
+  collection = entrezs$entrezgene_id,
+  array.type = "EPIC",
+  plot.bias = TRUE,
+  prior.prob = TRUE,
+  anno = RSanno,
+  equiv.cpg = TRUE,
+  fract.counts = TRUE,
+  sig.genes = TRUE
+) #FDR=4.623426e-13
+
+#Sankey diagram for KEGG
+library(plyr)
+sankey=gst_KEGG[gst_KEGG$FDR<0.5,c("Description","SigGenesInSet","DE","FDR")]
+sankey=arrange(sankey,FDR)
+
+#how to do manually one by one
+SigGenesInSet_1=unlist(strsplit(sankey[1,"SigGenesInSet"], ","))
+SigGenesInSet_1=SigGenesInSet_1[SigGenesInSet_1 %in% DMG_DEG_overlap_fusion$external_gene_name]
+SigGenesInSet_1=data.frame(SigGenesInSet_1)
+
+SigGenesInSet_2=unlist(strsplit(sankey[2,"SigGenesInSet"], ","))
+SigGenesInSet_2=SigGenesInSet_2[SigGenesInSet_2 %in% DMG_DEG_overlap_fusion$external_gene_name]
+SigGenesInSet_2=data.frame(SigGenesInSet_2)
+
+SigGenesInSet_3=unlist(strsplit(sankey[3,"SigGenesInSet"], ","))
+SigGenesInSet_3=SigGenesInSet_3[SigGenesInSet_3 %in% DMG_DEG_overlap_fusion$external_gene_name]
+SigGenesInSet_3=data.frame(SigGenesInSet_3)
+
+SigGenesInSet_11=unlist(strsplit(sankey[11,"SigGenesInSet"], ","))
+SigGenesInSet_11=SigGenesInSet_11[SigGenesInSet_11 %in% DMG_DEG_overlap_fusion$external_gene_name]
+SigGenesInSet_11=data.frame(SigGenesInSet_11)
+
+all_sigs=rbind.fill(SigGenesInSet_1,SigGenesInSet_2,SigGenesInSet_3)
+
+#This works to, just an extra line after and makes a list. how to do it with making it a list, the issue is that each time it makes a vector with the same name, so when it tries to combine them it is adding the rows up instead of the columns, since they have the same name
+
+SigGenesInSet=c()
+for (i in 1:30)
+{
+  x=unlist(strsplit(sankey[i,"SigGenesInSet"], ","))
+  y=x[x %in% DMG_DEG_overlap_fusion$external_gene_name]
+  z=data.frame(y)
+  colnames(z)=paste("y",i)
+  SigGenesInSet=append(SigGenesInSet,list(z))
+}
+
+
+all_sigs <- dplyr::bind_rows(SigGenesInSet)
+all_sigs= rbindlist(SigGenesInSet,fill=TRUE) #SAME THING just another way
+
+colnames(all_sigs)=sankey$Description[1:30]
+
+
+#how to do it! go ilya the loop-master once again (but this time I helped)
+SigGenesInSet=c() 
+for (i in 1:55)
+{
+  x=unlist(strsplit(sankey[i,"SigGenesInSet"], ","))
+  y=x[x %in% DMG_DEG_overlap_fusion$external_gene_name]
+  z=data.frame(y)
+  colnames(z)[1]=paste0("kacki",i)
+  colnames(z)
+  SigGenesInSet=rbind.fill(SigGenesInSet,z)
+ 
+}
+
+colnames(SigGenesInSet)=sankey$Description[1:55]
+
+library(openxlsx)
+write.xlsx(gsaREACTOME, "Supplementary Reactome pathways_DMRs.xlsx", sheetName = "Sheet1",
+           col.names = TRUE, row.names = TRUE, append = FALSE)
+write.xlsx(gst, "Supplementary GO terms.xlsx", sheetName = "Sheet1",
+           col.names = TRUE, row.names = TRUE, append = FALSE)
+
+#for REVIGO TREE MAP for GO
+gst$GOnumb=rownames(gst)
+GOs=gst[gst$FDR<0.005,c("FDR","GOnumb")]
+
+#FOR MET MAP!!!!path:hsa04550
+library(org.Hs.eg.db)
+library(annotate)
+metgenes=genekegglinks[grep("01100", genekegglinks$PathwayID), ]
+symbols=metgenes$GeneID
+a.symbol <- as.vector(unlist(mget(symbols, envir=org.Hs.egSYMBOL, ifnotfound=NA)))
+names(a.symbol)=symbols
+metgenes_overlap_DMG=data.frame(a.symbol[is.element(a.symbol,intersect(a.symbol,DMRgenes_unique))])
+metgenes_overlap_DMG$color="red"
+
+#change anno of results.ranges to the new anno and try in goreg
+results.ranges_only2=results.ranges_only
+results.ranges_only2$overlapping.genes=better_annotation
+newGR=results.ranges_only2[results.ranges_only2@elementMetadata$Stouffer <0.005&results.ranges_only2@elementMetadata$HMFDR <0.005&results.ranges_only2@elementMetadata$Fisher<0.005]
+
+
+gst_KEGG<-goregion(
+  newGR,#make sure getting original one and not one that added better annotation and converted to tbl
+  all.cpg = META_filtered$MarkerName,
+  collection = "KEGG",
+  array.type = "EPIC",
+  plot.bias = TRUE,
+  prior.prob = TRUE,
+  anno = RSanno,
+  equiv.cpg = TRUE,
+  fract.counts = TRUE,
+  sig.genes=TRUE
+)
+
+gometh_KEGG<-gometh(
+  sig.cpg=DMPs$MarkerName,#make sure getting original one and not one that added better annotation and converted to tbl
+  all.cpg = META_filtered$MarkerName,
+  collection = "KEGG",
+  array.type = "EPIC",
+  plot.bias = TRUE,
+  prior.prob = TRUE,
+  anno = RSanno,
+  equiv.cpg = TRUE,
+  fract.counts = TRUE,
+  sig.genes=TRUE
+)
+
+gometh_GO<-gometh(
+  sig.cpg=DMPs$MarkerName,#make sure getting original one and not one that added better annotation and converted to tbl
+  all.cpg = META_filtered$MarkerName,
+  collection = "GO",
+  array.type = "EPIC",
+  plot.bias = TRUE,
+  prior.prob = TRUE,
+  anno = RSanno,
+  equiv.cpg = TRUE,
+  fract.counts = TRUE,
+  sig.genes=TRUE
+)
+
+#well cool I figured out how to extract the genes, but now its in the function! sig.genes=TRUE
+met_genes_2=unlist(strsplit(gst_KEGG["path:hsa01100","SigGenesInSet"], ","))
+
+#retreieve genes from each go term, then overlap with my DMGs
+library(biomaRt)
+ensembl = useMart("ensembl",dataset="hsapiens_gene_ensembl") #uses human ensembl annotations
+#gets gene symbol, transcript_id and go_id for all genes annotated with GO:0007507
+gene.data <- getBM(attributes=c('hgnc_symbol', 'ensembl_transcript_id', 'go_id'),
+                   filters = 'go', values = 'path:hsa01100', mart = ensembl)
+
+gene.data=unique(gene.data$hgnc_symbol)
+
+#now for KEGG
+library("KEGGREST")
+
+#Get the list of numbers, gene symbols and gene description, works but for some reason the one pathway i want says null, i thinkits a parent kegg, has many associated with it
+names <- keggGet("hsa00480")[[1]]
+#Delete the gene number by deleting every other line
+namesodd <-  names[seq(0,length(names),2)]
+#Create a substring deleting everything after the ; on each line (this deletes the gene description).
+namestrue <- gsub("\\;.*","",namesodd)
+#export the vector as a csv
+write.csv(namestrue, file = "hsa05215",quote = F, row.names = F)
+
+kegg_DMEG=DMRgenes_unique[is.element(DMRgenes_unique,intersect(DMRgenes_unique,namestrue))] #all appear in FUSION
+
+
+#try with different package (this gives integers dont know what to do with them)
+library(gage)
+keggset=kegg.gsets(species = "hsa", id.type = "kegg", check.new=FALSE)
+
+
+#make pathway fig
+library(ggrepel)
+gst$percent=(gst$DE/gst$N)*100
+gst_sig=gst %>% filter(FDR<0.005)%>%
+  arrange(FDR)
+TERM=gst_sig$TERM
+gg=ggplot(gst_sig, aes(percent, -log10(P.DE),label=TERM)) +
+  geom_point(aes(col=ONTOLOGY),size=0.8)+
+  labs(x="% of genes in GO term that are differentially methylated",y="-log10(p-value)")+
+  theme_minimal()+
+  labs(col = "Ontology")+
+  geom_label_repel(data=gst_sig[1:5,],
+                   size=2.5,
+                   box.padding = unit(0.5, "lines"),
+                   point.padding = unit(0.2, "lines")
+                   )
+
+tiff("GO term dotplot.tiff",
+     height = 5.5,
+     width = 7,
+     units = "in",
+     res = 600)
+gg
+dev.off()
+
+#for KEGG maybe better??
+gst_KEGG$percent=(gst_KEGG$DE/gst_KEGG$N)*100
+gst_KEGG_sig=gst_KEGG %>% filter(FDR<0.005) %>% arrange(desc(FDR))
+gst_KEGG_sig$Description=factor(gst_KEGG_sig$Description,levels=rev(c("Metabolic pathways","Rap1 signaling pathway","Pathways in cancer","Cushing syndrome","Growth hormone synthesis, secretion and action","Calcium signaling pathway")))
+bb=ggplot(gst_KEGG_sig,aes(x=Description,y=percent,color=FDR))+
+  scale_color_gradient(low="orange", high="blue",trans = 'reverse')+
+  ylab("% of genes in KEGG pathway that are differentially methylated ")+
+  xlab("")+
+  geom_jitter(width=0)+
+  coord_flip()+
+  theme_minimal()
+
+tiff("KEGG pathways plot.tiff",
+     height = 4,
+     width = 7,
+     units = "in",
+     res = 600)
+bb
+dev.off()
+
+#metab pathway map
+library(pathview)
+library(limma)
+genekegglinks=getGeneKEGGLinks(species.KEGG = "hsa",convert=FALSE)
+#subset those which contain 01100
+metgenes=genekegglinks[grep("00010", genekegglinks$PathwayID), ]
+library(org.Hs.eg.db)
+
+#kegg mapper website, just need to get entrex id numbs of genes
+met_genes_2=unlist(strsplit(gst_KEGG["path:hsa01100","SigGenesInSet"], ","))
+symbols=met_genes_2
+# use mapIds method to obtain Entrez IDs
+entrezIDs=mapIds(org.Hs.eg.db, symbols, 'ENTREZID', 'SYMBOL')
+
+write.table(entrezIDs,
+            file="KEGG_metab_pathway_genes.txt",
+            quote = FALSE,
+            row.names = FALSE,
+            col.names = TRUE,
+            sep="\t")
+
+#make the figures for the paper again  but with the meta results, and NOW without x-hyb probes
+#We can add in different color the points that are significant, this is the current working code
+library(dplyr)
+library(ggplot2)
+CpGs=META_filtered$MarkerName
+all_results = mutate(META_filtered, sig=ifelse(META_filtered$FDR<0.005, "FDR<0.005", "Not Sig"))
+all_results = mutate(all_results, coef=ifelse(all_results$BetaEffectSize<0, "neg", "pos"))
+all_results = mutate(all_results, color=ifelse(all_results$FDR>0.005,"black",ifelse(all_results$FDR<0.005&all_results$coef=="neg","blue","red")))#for some reason worked this way and not when i did adjp> so above two lines are kind of extra but helped to make sure it was correct
+all_results=data.frame(CpGs,all_results)
+#ifelse- "if its met" "it will do this", volcano
+all_results$color<-as.factor(all_results$color)
+p=ggplot(all_results, aes(BetaEffectSize, -log10(P.value))) +
+  geom_point(aes(col=color),size=0.3)+
+  scale_color_manual(values=c("black","#1F78B4", "#E31A1C"))+
+  labs(x="% DNAm difference btwn males & females",y="-log10(p-value)")+
+  theme_minimal()+
+  theme(legend.position = "none")+
+  xlim(-40, 40)+
+  ylim(0,350)
+
+
+
+
+
+
+#show one hypo and one hyper cpg
+library(ggrepel)
+rownames(all_results)=all_results$MarkerName
+q=p+geom_text_repel(data=all_results[c("cg10031651","cg03143849"),],
+                    aes(label=CpGs),
+                    size=2.5,
+                    box.padding = unit(3, "lines"),
+                    point.padding = unit(0, "lines")
+                    ) #how to subset two rows!
+
+#save
+tiff("Volcano plot x-hyb removed.tiff",
+     height=4.5,
+     width=4,
+     units="in",
+     res=600)
+q
+dev.off()
+
+#number of hyper and hypo DMPs
+hyper=DMPs[DMPs$BetaEffectSize>0,]
+hypo=DMPs[DMPs$BetaEffectSize<0,]
+nrow(hypo)/(nrow(hypo)+nrow(hyper))*100
+
+#average ES
+mean(hyper$BetaEffectSize) #2.8
+mean(hypo$BetaEffectSize) #-3.5
+range(DMPs$BetaEffectSize)
+
+#Effect size seems massive, try doing a boxplot of each study at most sig cpg
+rownames(META_filtered)=META_filtered$MarkerName
+BetaEffectSize=META_filtered$BetaEffectSize
+BetaEffectSize=data.frame(BetaEffectSize)
+rownames(BetaEffectSize)=rownames(META_filtered)
+rownames(META_filtered)[which(BetaEffectSize==min(BetaEffectSize))]
+
+#choose only ones included in the analysis (and not x-hyb), oops dont need this
+#FUSION_B_analyzed=FUSION_B[rownames(FUSION_B) %in% all_results$MarkerName,]
+FUSION_B_t=t(FUSION_B)
+cpgs_phenos_FUSION=cbind(FUSION_pheno,FUSION_B_t)
+boxplot(cpgs_phenos_FUSION[,"cg02380025"]~cpgs_phenos_FUSION$sex,xlab="",ylab="DNA meth at cg03143849",main="FUSION")
+
+GENESMART_B_t=t(Gene_SMART_B)
+cpgs_phenos_GENESMART=cbind(merged_pheno,GENESMART_B_t)
+#for gene smart only graph pre's
+cpgs_phenos_GENESMART_PREs=cpgs_phenos_GENESMART[ c(FALSE,TRUE), ]
+boxplot(cpgs_phenos_GENESMART[,"cg00167275"]~cpgs_phenos_GENESMART$batch,xlab="",ylab="DNA meth at cg00167275",main="GeneSMART")
+
+GSE38291_B_t=t(GSE38291_B)
+cpgs_phenos_GSE38291=cbind(GSE38291_pheno,GSE38291_B_t)
+
+boxplot(cpgs_phenos_GSE38291[,"cg09516963"]~cpgs_phenos_GSE38291$Sex,xlab="",ylab="DNA meth at cg09516963",main="GSE38291")
+
+#boxplot of resids
+GENESMART_resid_t=t(residuals_onlyBatch)
+cpgs_phenos_GENESMART=cbind(merged_pheno,GENESMART_resid_t)
+boxplot(cpgs_phenos_GENESMART[,"cg00167275"]~cpgs_phenos_GENESMART$batch,xlab="",ylab="DNA meth at cg00167275 adj for batch",main="GeneSMART")
+
+#dotplot facted by batch colored by sex
+ggdotplot(data=cpgs_phenos_GENESMART, x='batch', y='cg00167275',
+          xlab="", ylab='DNAm at cg00167275',
+          fill="sex",palette=c("#CC6699","#0099CC"),
+          panel.labs.font = list(size = 12))+
+  theme(axis.text.x = element_text(size=12),
+        axis.text.y = element_text(size=12))+
+  font("xy", size=12)+
+  rremove("legend")+
+  ggtitle("Resid GeneSMART")+
+  rremove("x.text")+
+  rremove("x.ticks")
+
+
+ggdotplot(cpgs_phenos_GENESMART, x = "batch", y = "cg00167275",
+          add = "mean_sd", add.params = list(width = 0.5),
+          color = "sex")
+
+#prettier and loop of boxplots
+library(RColorBrewer)
+display.brewer.all(colorblindFriendly = T)
+library(ggpubr)
+#make sex males first so green is first then orange
+cpgs_phenos_FUSION$sex=factor(cpgs_phenos_FUSION$sex, levels=c("M","F"))#for some reason males showing up on left
+cpgs_phenos_GENESMART_PREs$sex=factor(cpgs_phenos_GENESMART_PREs$sex, levels=c("male","female"))
+cpgs_phenos_GSE38291$Sex=factor(cpgs_phenos_GSE38291$Sex,levels=c("M","F"))
+b=ggboxplot(data=cpgs_phenos_FUSION, x='sex', y='cg03143849',
+            xlab="", ylab='DNAm at cg03143849',
+          fill="sex",
+            panel.labs.font = list(size = 12))+
+  theme(axis.text.x = element_text(size=12),
+        axis.text.y = element_text(size=12))+
+  font("xy", size=12)+
+  rremove("legend")+
+  ggtitle("FUSION")+
+  rremove("x.text")+
+  rremove("x.ticks")+
+  scale_fill_brewer(palette = "Set2") #GSE= "Sex" and FUSION &GENESMART= "sex"
+
+tiff("HYPER cg FUSION.tiff",
+     height = 3,
+     width = 3.5,
+     units = "in",
+     res = 600)
+b
+dev.off()
+
+#PCA of all three datasets for DMPs
+library("FactoMineR")
+library("factoextra")
+library("RColorBrewer")
+
+#make sure males and females factors M first then female, and DMPs rownames are cpgs
+FUSION_pheno$sex=factor(FUSION_pheno$sex, levels=c("M","F"))#for some reason males showing up on left
+merged_pheno$sex=factor(merged_pheno$sex, levels=c("male","female"))
+GSE38291_pheno$Sex=factor(GSE38291_pheno$Sex,levels=c("M","F"))
+
+#PCA FUSION
+#subset PCA, make sure rownames of DMPs are cpgs
+DMPsinFUSION=FUSION_B[is.element(rownames(FUSION_B),intersect(rownames(FUSION_B),rownames(DMPs))),] #all appear in FUSION
+dat=scale(DMPsinFUSION[,]) #Transform each variable to a z-score
+dat_t=t(dat)
+res.pca <- PCA(dat_t, graph = FALSE) #perform the PCA
+
+Sex=FUSION_pheno$sex
+PCAplot=fviz_pca_ind(res.pca, geom.ind = "none",title="FUSION")+
+  geom_point(aes(color=Sex),size=1)+
+  theme(legend.position="none")+
+  scale_color_manual(values=c("#66C2A5","#FC8D62"))
+  
+
+#PCA GSE
+DMPsinGSE38291=GSE38291_B[is.element(rownames(GSE38291_B),intersect(rownames(GSE38291_B),rownames(DMPs))),] #all appear in FUSION, 61567 in gene smart,1692 in GSE
+
+dat=scale(DMPsinGSE38291[,]) #Transform each variable to a z-score
+dat_t=t(dat)
+res.pca <- PCA(dat_t, graph = FALSE) #perform the PCA
+
+Sex=GSE38291_pheno$Sex
+PCAplot=fviz_pca_ind(res.pca, geom.ind = "none",title="GSE38291")+
+  geom_point(aes(color=Sex),size=1.5)+
+  scale_shape_manual(values = c(32, 17))+
+  guides(color=guide_legend(title=NULL))+
+  theme(legend.position = "right")+ #one with legend
+  scale_color_manual(values=c("#66C2A5","#FC8D62"))
+  scale_color_discrete(labels=c("Male", "Female"))
+
+
+#for GeneSMART to get only PRE
+DMPsinGENESmart=Gene_SMART_B[is.element(rownames(Gene_SMART_B),intersect(rownames(Gene_SMART_B),rownames(DMPs))),] #61,598 appear in FUSION, 61567 in gene smart,1692 in GSE
+  
+dat=scale(DMPsinGENESmart[,]) #Transform each variable to a z-score
+dat_t=t(dat)
+res.pca <- PCA(dat_t, graph = FALSE) #perform the PCA
+Time=merged_pheno$Timepoint
+Sex=merged_pheno$sex
+fviz_pca_ind(res.pca, geom.ind = "none",title="GeneSMART")+
+  geom_point(aes(shape=Time,color=Sex,size=1.5))+
+  scale_shape_manual(values = c(32, 19))+
+  theme(legend.position = "none")
+
+#or (bcs dots showing up huge)
+Gene_SMART_B_PREs=Gene_SMART_B[, c(FALSE,TRUE) ]
+DMPsinGENESmart_PREs=Gene_SMART_B_PREs[is.element(rownames(Gene_SMART_B_PREs),intersect(rownames(Gene_SMART_B_PREs),rownames(DMPs))),] #61,598 appear in FUSION, 61567 in gene smart,1692 in GSE
+
+dat=scale(DMPsinGENESmart_PREs[,]) #Transform each variable to a z-score
+dat_t=t(dat)
+res.pca <- PCA(dat_t, graph = FALSE) #perform the PCA
+Sex=merged_pheno[c(FALSE,TRUE),"sex"]
+PCAplot=fviz_pca_ind(res.pca, geom.ind = "none",title="Gene SMART")+
+  geom_point(aes(color=Sex),size=1.5)+
+  scale_shape_manual(values = c(32, 17))+
+  guides(color=guide_legend(title=NULL))+
+  theme(legend.position = "none")+
+  scale_color_manual(values=c("#66C2A5","#FC8D62"))
+
+#to check if edwin is an outlier, oh his surgery was AFTER this intervention
+Name=merged_pheno$ID
+fviz_pca_ind(res.pca, geom.ind = "none",title="GeneSMART")+
+  geom_point(aes(shape=Time,color=Sex,size=1.5))+
+  scale_shape_manual(values = c(32, 19))+
+  theme(legend.position = "none")+
+  geom_text(aes(label=ifelse(Name=="SG149",as.character(Name),'')))
+            
+tiff("PCA plot GeneSMART_BATCHEFFECT_all CpGs.tiff",
+     height = 4,
+     width = 4.5,
+     units = "in",
+     res = 600)
+PCAplot
+dev.off()
+
+#reviewers have asked for a PCA of all CpGs not only sex DMPs:
+#FUSION
+dat=scale(FUSION_B[,]) #Transform each variable to a z-score
+dat_t=t(dat)
+res.pca <- PCA(dat_t, graph = FALSE) #perform the PCA
+
+Sex=FUSION_pheno$sex
+PCAplot=fviz_pca_ind(res.pca, geom.ind = "none",title="FUSION-all CpGs")+
+  geom_point(aes(color=Sex),size=1)+
+  theme(legend.position="none")+
+  scale_color_manual(values=c("#66C2A5","#FC8D62"))
+
+#GSE38291
+dat=scale(GSE38291_B[,]) #Transform each variable to a z-score
+dat_t=t(dat)
+res.pca <- PCA(dat_t, graph = FALSE) #perform the PCA
+
+
+Sex=GSE38291_pheno$Sex
+PCAplot=fviz_pca_ind(res.pca, geom.ind = "none",title="GSE38291-all CpGs")+
+  geom_point(aes(color=Sex),size=1.5)+
+  scale_shape_manual(values = c(32, 17))+
+  guides(color=guide_legend(title=NULL))+
+  theme(legend.position = "right")+ #one with legend
+  scale_color_manual(values=c("#66C2A5","#FC8D62"))
+
+#gene smart
+Gene_SMART_B_PREs=residuals_onlyBatch[, c(FALSE,TRUE) ]
+
+dat=scale(Gene_SMART_B_PREs[,]) #Transform each variable to a z-score
+dat_t=t(dat)
+res.pca <- PCA(dat_t, graph = FALSE) #perform the PCA
+Sex=merged_pheno[c(FALSE,TRUE),"sex"]
+PCAplot=fviz_pca_ind(res.pca, geom.ind = "none",title="Gene SMART-all CpGs")+
+  geom_point(aes(color=Sex),size=1.5)+
+  scale_shape_manual(values = c(32, 17))+
+  guides(color=guide_legend(title=NULL))+
+  theme(legend.position = "none")+
+  scale_color_manual(values=c("#66C2A5","#FC8D62"))
+
+#reviewers want to undertand why we cant merge all studies into one PCA plot, gene smart batch issue:
+batch=as.factor(merged_pheno[c(FALSE,TRUE),"batch"])
+Gene_SMART_B_PREs=Gene_SMART_B[, c(FALSE,TRUE) ]
+dat=scale(Gene_SMART_B_PREs[,]) #Transform each variable to a z-score
+dat_t=t(dat)
+res.pca <- PCA(dat_t, graph = FALSE) #perform the PCA
+Sex=merged_pheno[c(FALSE,TRUE),"sex"]
+
+PCAplot=fviz_pca_ind(res.pca, geom.ind = "none",title="Gene SMART-all CpGs")+
+  geom_point(aes(color=Sex,shape=batch),size=1.5)+
+  #scale_shape_manual(values = c(32, 17))+
+  guides(color=guide_legend(title=NULL))+
+  theme(legend.position = "right")+
+  scale_color_manual(values=c("#66C2A5","#FC8D62"))
+
+PCAplot=fviz_pca_ind(res.pca, geom.ind = "none",title="GeneSMART")+
+  geom_point(aes(shape=Time,color=Sex,size=1.5))+
+  scale_shape_manual(values = c(32, 19))+
+  theme(legend.position = "none")
+
+#chromatin states
+#add chromatin state from annotation to results and graph
+sig=rownames(DMPs)
+sig_w_chr_st=annotation[sig,]
+sig_w_chr_st$DMPstatus="DMP"
+nonsig=rownames(META_filtered[which(META_filtered$FDR>0.005),]) #meta_filtered= total 633,645 cpgs
+nonsig_w_chr_st=annotation[nonsig,]
+nonsig_w_chr_st$DMPstatus="non-DMP"
+chromatin_states_combined=rbind(sig_w_chr_st,nonsig_w_chr_st)
+
+library(plyr)
+DMPs_to_graph=sig_w_chr_st[!grepl(',',sig_w_chr_st$E107),] #this will remove those few that are annotated to multiple chromatin states!!! so DMPs changes from 56,813 to 56,762
+count_DMPs=dplyr::count(DMPs_to_graph, E107)
+colnames(count_DMPs)=c("E107","number of DMPs")
+count_DMPs$`Percentage_of_DMPs`=(count_DMPs$`number of DMPs`/nrow(DMPs_to_graph))*100 #bcs removed the ones that were annotated to both, or should divide by 26,525?
+count_DMPs$DMPstatus="DMPs"
+
+nonDMPs_to_graph=nonsig_w_chr_st[!grepl(',',nonsig_w_chr_st$E107),]
+count_nonDMPs=dplyr::count(nonDMPs_to_graph, E107)
+colnames(count_nonDMPs)=c("E107","number of nonDMPs")
+count_nonDMPs$Percentage_of_nonDMPs=(count_nonDMPs$`number of nonDMPs`/nrow(nonDMPs_to_graph))*100 #bcs removed the ones that were annotated to both, or should divide by 673025 (dim of nonsig_w_chr_st) this is for ones that are annotated to two chrom states?
+count_nonDMPs$DMPstatus="non-DMPs"
+
+chromatin_states_combined=cbind(count_DMPs,count_nonDMPs)
+
+chromatin_states_combined2=chromatin_states_combined[,-1]
+
+
+library(tidyverse)
+chrom_stat_longer=pivot_longer(data=chromatin_states_combined2,
+                               cols=contains("Percentage"),
+                               names_to = "DMP_status",
+                               values_to = "Percentage_of_CpGs")
+
+
+library(ggplot2)
+ggplot(chrom_stat_longer,aes(fill=DMP_status,x=E107,y=Percentage_of_CpGs))+
+  geom_bar(position=position_dodge(),stat="identity")+
+  theme_minimal()+
+  scale_fill_manual(values=c('red','black')) #this is nice and all but want to facet by E107 and split on hyper hypo
+
+hyper=rownames(DMPs[DMPs$Effect>0,])
+hypo=rownames(DMPs[DMPs$Effect<0,])
+nonsig=rownames(META_filtered[which(META_filtered$FDR>0.005),])
+
+hyper_w_chr_st=annotation[hyper,13:14]
+hypo_w_chr_st=annotation[hypo,13:14]
+nonsig_w_chr_st=annotation[nonsig,13:14]
+
+library(plyr) #must do this to use "freq" in count function, otherwise use "n"
+
+hyper_to_graph=hyper_w_chr_st[!grepl(',',hyper_w_chr_st$E107),]
+count_hyper=plyr::count(hyper_to_graph, "E107") #later do 108
+count_hyper$Percentage=(count_hyper$freq/nrow(DMPs_to_graph))*100 #bcs removed the ones that were annotated to both, or should divide by 26,525?
+count_hyper$DMPstatus="DMPs"
+count_hyper$DMPstatus2="Hyper"
+
+hypo_to_graph=hypo_w_chr_st[!grepl(',',hypo_w_chr_st$E107),]
+count_hypo=plyr::count(hypo_to_graph, "E107") #later do 108
+count_hypo$Percentage=(count_hypo$freq/nrow(DMPs_to_graph))*100 #bcs removed the ones that were annotated to both, or should divide by 26,525?
+count_hypo$DMPstatus="DMPs"
+count_hypo$DMPstatus2="Hypo"
+
+nonDMPs_to_graph=nonsig_w_chr_st[!grepl(',',nonsig_w_chr_st$E107),]
+count_nonDMPs=plyr::count(nonDMPs_to_graph, "E107")
+count_nonDMPs$Percentage=(count_nonDMPs$freq/nrow(nonDMPs_to_graph))*100 #bcs removed the ones that were annotated to both, or should divide by 673025 (dim of nonsig_w_chr_st) this is for ones that are annotated to two chrom states?
+count_nonDMPs$DMPstatus="non-DMPs"
+count_nonDMPs$DMPstatus2="non-DMPs"
+
+chrom_stat_all <- rbind(count_hyper,count_hypo,count_nonDMPs)
+
+chrom_stat_all$E107=as.character(chrom_stat_all$E107)
+s<-strsplit(chrom_stat_all$E107,'[_]')
+s=unlist(s)
+s=s[c(FALSE,TRUE)] #to extract everything after _ THERE MUST BE AN EASIER WAY BUT THIS WORKED!
+
+chrom_stat_all$E107=s
+chrom_stat_all$E107=factor(chrom_stat_all$E107,levels=c("TssA", "TssAFlnk","TxFlnk","Tx","TxWk","EnhG","Enh","ZNF/Rpts","Het","TssBiv", "BivFlnk","EnhBiv" ,"ReprPC" , "ReprPCWk" ,"Quies"))
+
+#to make the chrom states nicer FIX THIS ITS OUT OF ORDER
+supp.labs<- c("Active TSS","Flanking active TSS","Transcr. at gene 5' and 3'","Strong transcription","Weak transciption","Genic enhancers","Enhancers","ZNF genes & repeats","Heterochromatin","Bivalent/poised TSS","Flanking bivalent TSS/Enh","Bivalent enhancer","Repressed polycomb","Weak repressed polycomb","Quiescent/low")
+names(supp.labs) <- c("TssA", "TssAFlnk","TxFlnk","Tx","TxWk","EnhG","Enh","ZNF/Rpts","Het","TssBiv", "BivFlnk","EnhBiv" ,"ReprPC" , "ReprPCWk" ,"Quies")
+
+p=ggplot(data=chrom_stat_all, aes(x=DMPstatus, y=Percentage,fill=DMPstatus2)) + 
+  geom_bar(stat="identity")+
+  facet_grid(~E107, labeller = labeller(E107 = supp.labs))+
+  theme_classic()+
+  scale_fill_manual(values=c("#E31A1C","#1F78B4",'black'))+
+  xlab("")+
+  ylab("Percentage of DMPs or non-DMPs")+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5))+
+  labs(fill = "DMP status")+
+  theme(legend.position = "topright")+
+  theme(strip.text.x = element_text(size=7,angle = 90))+
+  theme(strip.background = element_rect(
+      color="gray", fill="gray", size=1.5, linetype="solid"
+    ))
+
+
+
+tiff("WOW chromatin states_reordered.tiff",
+     height = 5,
+     width = 12.5,
+     units = "in",
+     res = 600)
+p
+dev.off()
+
+
+
+#chi2 for just DMP vs non DMP chrom states
+
+rownames(chromatin_states_combined)=chromatin_states_combined$E107
+x2_chrom=chromatin_states_combined %>% dplyr::select(`number of DMPs`,`number of nonDMPs`)
+chisq_chr <- chisq.test(x2_chrom)
+chisq_chr
+library(corrplot)
+corrplot(chisq_chr$residuals, is.cor = FALSE)
+chisq_chr$p.value #2.2e-16
+contrib <- 100*chisq_chr$residuals^2/chisq_chr$statistic
+corrplot(contrib, is.cor = FALSE)
+
+#chi2 for for hyper hypo and nonDMPS chromatin state
+
+#redo count hyper,hypo,nondmp bcs they have too many unecessary columns that I added to make the bar chart
+count_hyper=plyr::count(hyper_to_graph, "E107") #later do 108
+count_hypo=plyr::count(hypo_to_graph, "E107") #later do 108
+count_nonDMPs=dplyr::count(nonDMPs_to_graph, E107)
+
+forx2=cbind(count_hyper,count_hypo,count_nonDMPs)
+rownames(forx2)=forx2$E107
+colnames(forx2)=c("E107","hyper","whatevs","hypo","whajh","non-DMPs")
+forX2=forx2 %>% dplyr::select(hyper,hypo,`non-DMPs`)
+#to remove the 1_ etc from rownames for beauty of corrplot, and put in correct order
+s<-strsplit(rownames(forX2),'[_]')
+s=unlist(s)
+s=s[c(FALSE,TRUE)]
+rownames(forX2)=s
+forX2$E107=factor(rownames(forX2),levels=c("TssA", "TssAFlnk","TxFlnk","Tx","TxWk","EnhG","Enh","ZNF/Rpts","Het","TssBiv", "BivFlnk","EnhBiv" ,"ReprPC" , "ReprPCWk" ,"Quies"))
+forX2=arrange(forX2,E107)
+rownames(forX2)=forX2$E107
+forX2=forX2[,-4]
+
+chisq_chr <- chisq.test(forX2)
+chisq_chr
+chisq_chr$p.value #2.2e-16
+corrplot(chisq_chr$residuals, is.cor = FALSE,cl.ratio=0.7,tl.col="black")
+contrib <- 100*chisq_chr$residuals^2/chisq_chr$statistic
+corrplot(contrib, is.cor = FALSE,tl.col="black",cl.offset=1,cl.ratio=0.7)
+
+#try doing chi2 but for E108 for hyper/hypo/non and just DMP/nonDMP
+DMPs_to_graph=sig_w_chr_st[!grepl(',',sig_w_chr_st$E108),] #this will remove those few that are annotated to multiple chromatin states!!! so DMPs changes from 61,604 to 61,549
+count_DMPs=dplyr::count(DMPs_to_graph, E108)
+colnames(count_DMPs)=c("E108","number of DMPs")
+count_DMPs$`Percentage_of_DMPs`=(count_DMPs$`number of DMPs`/nrow(DMPs_to_graph))*100 #bcs removed the ones that were annotated to both, or should divide by 26,525?
+count_DMPs$DMPstatus="DMPs"
+
+nonDMPs_to_graph=nonsig_w_chr_st[!grepl(',',nonsig_w_chr_st$E108),]
+count_nonDMPs=dplyr::count(nonDMPs_to_graph, E108)
+colnames(count_nonDMPs)=c("E108","number of nonDMPs")
+count_nonDMPs$Percentage_of_nonDMPs=(count_nonDMPs$`number of nonDMPs`/nrow(nonDMPs_to_graph))*100 #bcs removed the ones that were annotated to both, or should divide by 673025 (dim of nonsig_w_chr_st) this is for ones that are annotated to two chrom states?
+count_nonDMPs$DMPstatus="non-DMPs"
+
+chromatin_states_combined=cbind(count_DMPs,count_nonDMPs)
+
+chromatin_states_combined2=chromatin_states_combined[,-1]
+
+
+library(tidyverse)
+chrom_stat_longer=pivot_longer(data=chromatin_states_combined2,
+                               cols=contains("Percentage"),
+                               names_to = "DMP_status",
+                               values_to = "Percentage_of_CpGs")
+
+#hyper/hypo/nonDMP chi2
+hyper_to_graph=hyper_w_chr_st[!grepl(',',hyper_w_chr_st$E108),]
+hypo_to_graph=hypo_w_chr_st[!grepl(',',hypo_w_chr_st$E108),]
+nonDMPs_to_graph=nonsig_w_chr_st[!grepl(',',nonsig_w_chr_st$E108),]
+count_hyper=plyr::count(hyper_to_graph, "E108") #later do 108
+count_hypo=plyr::count(hypo_to_graph, "E108") #later do 108
+count_nonDMPs=dplyr::count(nonDMPs_to_graph, E108)
+
+forx2=cbind(count_hyper,count_hypo,count_nonDMPs)
+rownames(forx2)=forx2$E108
+colnames(forx2)=c("E107","hyper","whatevs","hypo","whajh","nonDMP")
+forX2=forx2 %>% dplyr::select(hyper,hypo,nonDMP)
+chisq_chr <- chisq.test(forX2,simulate.p.value = TRUE) #getting a warning that chi2 may be wrong, online says to try doing fisher exact test which is setting sim p value to true, bcs I only have 2 in ZNF/repeats
+chisq_chr
+chisq_chr$p.value #2.2e-16
+corrplot(chisq_chr$residuals, is.cor = FALSE,tl.col="black")
+contrib <- 100*chisq_chr$residuals^2/chisq_chr$statistic
+corrplot(contrib, is.cor = FALSE)
+#while p value is not as sig, results are same ENH & TSSA
+
+#for E108 just dmp vs non dmp
+rownames(chromatin_states_combined)=chromatin_states_combined$E108
+x2_chrom=chromatin_states_combined %>% dplyr::select(`number of DMPs`,`number of nonDMPs`)
+chisq_chr <- chisq.test(x2_chrom)
+chisq_chr
+library(corrplot)
+corrplot(chisq_chr$residuals, is.cor = FALSE)
+chisq_chr$p.value #<2.2e-16
+contrib <- 100*chisq_chr$residuals^2/chisq_chr$statistic
+corrplot(contrib, is.cor = FALSE)
+
+#NOW check whetherthe DMPs more likely to fall in a genomic location whose chromatin state differ between men and women?
+all_results$probeID=all_results$CpGs
+all_results_chrom_stat=all_results %>% inner_join(annotation,by="probeID")
+
+#this will remove those few that are annotated to multiple chromatin states (the ones with commas)!!! so DMPs changes from 61,604 to 61,549
+differing_results=all_results_chrom_stat[!grepl(',',all_results_chrom_stat$E107),]
+differing_results=differing_results[!grepl(',',differing_results$E108),]
+
+#this will remove everything before _ and then set the levels because the levels must be the same to find which are the same
+differing_results$E107=as.character(differing_results$E107)
+s<-strsplit(differing_results$E107,'[_]')
+s=unlist(s)
+s=s[c(FALSE,TRUE)] #to extract everything after _ THERE MUST BE AN EASIER WAY BUT THIS WORKED!
+
+differing_results$E107=s
+differing_results$E107=factor(differing_results$E107,levels=c("TssA", "TssAFlnk","TxFlnk","Tx","TxWk","EnhG","Enh","ZNF/Rpts","Het","TssBiv", "BivFlnk","EnhBiv" ,"ReprPC" , "ReprPCWk" ,"Quies"))
+
+#now same but for 108
+differing_results$E108=as.character(differing_results$E108)
+s<-strsplit(differing_results$E108,'[_]')
+s=unlist(s)
+s=s[c(FALSE,TRUE)] #to extract everything after _ THERE MUST BE AN EASIER WAY BUT THIS WORKED!
+
+
+differing_results$E108=s
+differing_results$E108=factor(differing_results$E108,levels=c("TssA", "TssAFlnk","TxFlnk","Tx","TxWk","EnhG","Enh","ZNF/Rpts","Het","TssBiv", "BivFlnk","EnhBiv" ,"ReprPC" , "ReprPCWk" ,"Quies"))
+
+#this then makes a column saying if they are the same or different
+differing_results = mutate(differing_results, Identical=ifelse(differing_results$E107==differing_results$E108, "Identical", "Different"))
+
+#select for if DMP or not and if diff or not
+DMPness_vs_chromatin=differing_results %>% dplyr::select(CpGs,sig,Identical)
+
+#identical and DMP
+ID_DMP=plyr::count(DMPness_vs_chromatin$sig=="FDR<0.005"&DMPness_vs_chromatin$Identical=="Identical")
+ID_DMP=ID_DMP[2,2]
+
+#identical and non-DMP
+ID_non=plyr::count(DMPness_vs_chromatin$sig=="Not Sig"&DMPness_vs_chromatin$Identical=="Identical")
+ID_non=ID_non[2,2]
+
+#different and non-DMP
+DIFF_non=plyr::count(DMPness_vs_chromatin$sig=="Not Sig"&DMPness_vs_chromatin$Identical=="Different")
+DIFF_non=DIFF_non[2,2]
+
+#different and DMP
+DIFF_DMP=plyr::count(DMPness_vs_chromatin$sig=="FDR<0.005"&DMPness_vs_chromatin$Identical=="Different")
+DIFF_DMP=DIFF_DMP[2,2]
+
+IDENTs=rbind(ID_DMP,ID_non)
+colnames(IDENTs)=c("Identical")
+
+DIFFs=rbind(DIFF_DMP,DIFF_non)
+colnames(DIFFs)=c("Different")
+
+FinalCounts=cbind(IDENTs,DIFFs)
+rownames(FinalCounts)=c("DMP","nonDMP")
+
+fisher.test(FinalCounts) #p-value < 2.2e-16
+#23905/(37614+23908) = 39% of DMPs are in chromatin states that are different between men and women
+#204308/(204308+423961) = 33% of non-DMPs are in chromatin states that are different between men and women
+#so when you are a DMP (try to put yourself in the shoes of a DMP), the odds of sitting in a chromatin state that is different between men and women increases by a factor 1.33 (vs when you are a non-DMP)
+#1.33 = 1/0.75
+#and the confidence interval is very narrow so you are very confident that this is true
+#new results:
+#p-value < 2.2e-16
+#alternative hypothesis: true odds ratio is not equal to 1
+#95 percent confidence interval:
+#  0.7472196 0.7743385
+#sample estimates:
+ # odds ratio 
+#0.7606743 
+
+#bar graph of these results
+DMPperc=(21956/(34778+21956))*100
+nonDMPperc=(186927/(186927+389261))*100
+status=c("DMPs","non-DMPs")
+Fisher_graph=t(data.frame(DMPperc,nonDMPperc))
+Fisher_graph=data.frame(Fisher_graph,status)
+
+#colors from rcolor brewer, color blind friendly
+# 1. Visualize a single RColorBrewer palette 
+# by specifying its name
+display.brewer.pal(12, name="Paired")
+
+# 2. Return the hexadecimal color code of the palette
+brewer.pal(12, name="Paired")
+
+bb=ggplot(Fisher_graph,aes(fill=status,x=status,y=Fisher_graph))+
+  geom_bar(stat="identity",width=0.5,position=position_dodge(width=0.2))+
+  theme_minimal()+
+  scale_fill_manual(values=c("#8DA0CB",'black'))+
+  xlab("")+
+  ylab("% found in sex-differing chromatin states")+
+  theme(legend.position = "none")+
+  theme(axis.text = element_text(size = 15),
+        axis.title=element_text(size=16))
+ # geom_col(position = position_dodge(0.5))
+
+tiff("Barplot of Island status DMP vs nonDMP.tiff",
+     height = 5,
+     width = 5,
+     units = "in",
+     res = 600)
+bb
+dev.off()  
+
+#check if the DMPs that lie in differing chromatin states are most commonly found in islands or promoters or where??
+DMPness_vs_chromatin_islandstat=differing_results %>% dplyr::select(probeID,sig,Identical,E107,E108,CGIposition,geneNames)
+DIFF_DMP=DMPness_vs_chromatin_islandstat[DMPness_vs_chromatin_islandstat$sig=="FDR<0.005"&DMPness_vs_chromatin_islandstat$Identical=="Different",]
+DIFF_DMP$CGIposition=DIFF_DMP$CGIposition %>% replace_na("OpenSea") #replace NA with opensea
+
+#count how many island status and how many of chrom state
+#subset which things want to be counted
+DIFF_DMP_fortable=DIFF_DMP %>% dplyr::select(E107,E108,CGIposition)
+count_table=table(DIFF_DMP_fortable)
+#now count how many diff combos regardless of CGIposition
+DIFF_DMP_fortable2=DIFF_DMP %>% dplyr::select(E107,E108)
+count_table2=table(DIFF_DMP_fortable2)
+
+#check if the nonDMPs that lie in differing chromatin states lie in same regions, bcs interesed in DNA meth
+# check the frequency of nondmps in the differing chrom regions, and where they are enriched
+DMPness_vs_chromatin_islandstat=differing_results %>% dplyr::select(probeID,sig,Identical,E107,E108,CGIposition,geneNames)
+DIFF_nonDMP=DMPness_vs_chromatin_islandstat[DMPness_vs_chromatin_islandstat$sig=="Not Sig"&DMPness_vs_chromatin_islandstat$Identical=="Different",]
+DIFF_nonDMP$CGIposition=DIFF_nonDMP$CGIposition %>% replace_na("OpenSea") #replace NA with opensea
+
+#count how many island status and how many of chrom state
+#subset which things want to be counted
+DIFF_nonDMP_fortable=DIFF_nonDMP %>% dplyr::select(E107,E108,CGIposition)
+count_table_non=table(DIFF_nonDMP_fortable)
+
+#without CGI, just all the combos
+DIFF_nonDMP_fortable2=DIFF_nonDMP %>% dplyr::select(E107,E108)
+count_table_non2=table(DIFF_nonDMP_fortable2)
+
+#Now check the 3 combos that are grouped together and seem to be very frequent among DMPs in differeing, are they enriched among nondmps too?
+count_table2_df=data.frame(count_table2)
+count_table_non2_df=data.frame(count_table_non2)
+#there MUST be a shorter way to do this but this worked...
+Stats1=count_table2_df %>% filter( E107 == "ReprPCWk" & E108=="Quies")
+Stats2=count_table2_df %>% filter( E107 == "ReprPC" & E108=="Quies")
+Stats3=count_table2_df %>% filter( E107 == "ReprPC" & E108=="ReprPCWk")
+combo=sum(Stats1$Freq,Stats2$Freq,Stats3$Freq)
+sum=sum(count_table2_df$Freq)
+rest=sum-combo
+DMPs_comboness=rbind(combo,rest)
+
+#now same but for nonDMPs
+Stats1=count_table_non2_df %>% filter( E107 == "ReprPCWk" & E108=="Quies")
+Stats2=count_table_non2_df %>% filter( E107 == "ReprPC" & E108=="Quies")
+Stats3=count_table_non2_df %>% filter( E107 == "ReprPC" & E108=="ReprPCWk")
+combo=sum(Stats1$Freq,Stats2$Freq,Stats3$Freq)
+sum=sum(count_table_non2_df$Freq)
+rest=sum-combo
+nonDMPs_comboness=rbind(combo,rest)
+
+combo_noncombo=cbind(DMPs_comboness,nonDMPs_comboness)
+colnames(combo_noncombo)=c("DMPs","non-DMPs")
+
+#chi2
+chisq_chr <- chisq.test(combo_noncombo)
+chisq_chr
+library(corrplot)
+corrplot(chisq_chr$residuals, is.cor = FALSE,tl.col="black")
+chisq_chr$p.value #2.2e-16
+contrib <- 100*chisq_chr$residuals^2/chisq_chr$statistic
+corrplot(contrib, is.cor = FALSE)
+
+
+
+#FOR DMP ISLAND STATUS ##
+#hard to convert my results.ranges into genomicratioset, but try for DMPs island status
+index=rownames(DMPs)
+META_matrix=as.matrix(META_filtered)
+grset <- makeGenomicRatioSetFromMatrix(
+  mat=META_matrix,
+  array = "IlluminaHumanMethylationEPIC",
+  annotation = "ilm10b4.hg19"
+)
+grset_sig=grset[index]
+nonsig=rownames(META_filtered[which(META_filtered$FDR>0.005),])
+grset_nonsig=grset[nonsig]
+prop_DMPs=prop.table(table(getIslandStatus(grset_sig))) #this works too but doesnt give exact number they want
+prop_nonDMPS=prop.table(table(getIslandStatus(grset_nonsig)))
+props=rbind(prop_DMPs,prop_nonDMPS)
+props=t(props)
+props=as.data.frame(props)
+props$DMPs=props$prop_DMPs*100
+props$nonDMPs=props$prop_nonDMPS*100
+
+#make both DMPs and nonDMPS appear on bar graph
+props$islandstatus=rownames(props)
+library(tidyverse)
+props_long=props %>%
+  gather("DMPness","percentage",-islandstatus)
+realprops=props_long[9:16,]
+realprops$islandstatus <- factor(realprops$islandstatus,levels = c("Island", "Shore", "Shelf", "OpenSea"))#change order on x axis
+bb=ggplot(realprops,aes(x=islandstatus,y=percentage,fill=DMPness))+
+  geom_col(position="dodge")+
+  xlab("Island Status")+
+  ylab("Percentage of CpGs")+
+  theme_minimal()+
+  theme(legend.title=element_blank())+
+  scale_fill_manual(values=c("#8DA0CB",'black'))
+
+#chi2 for island status
+props$num_of_DMP=props$prop_DMPs*length(grset_sig)
+props$num_of_nonDMP=props$prop_nonDMPS*length(grset_nonsig)
+
+x2=props %>% dplyr::select(num_of_DMP,num_of_nonDMP)
+chisq <- chisq.test(x2)
+chisq
+library(corrplot)
+corrplot(chisq$residuals, is.cor = FALSE)
+chisq$p.value #p-value < 2.2e-16 chisq$statistic
+
+# Contibution in percentage (%)
+contrib <- 100*chisq$residuals^2/chisq$statistic
+corrplot(contrib, is.cor = FALSE)
+
+#run on all but shores
+x22=x2[1:3,]
+chisq2 <- chisq.test(x22)
+chisq
+
+#run fisher on shelf and open sea
+fisher.test(x22) #not sig, nice!
+ 
+tiff(filename="Corrplot contributors island status DMPs and nonDMPs.tiff")
+corrplot(contrib, is.cor = FALSE)
+dev.off()
+
+###split up into hyper and hypo for island status
+results_sex=data.frame(DMPs)
+rownames(results_sex)=results_sex$MarkerName
+hyper=rownames(results_sex[which(results_sex$BetaEffectSize>0),])
+hypo=rownames(results_sex[which(results_sex$BetaEffectSize<0),])
+nonsig=rownames(META_filtered[which(META_filtered$FDR>0.005),])
+DMPs_to_graph=rownames(META_filtered[which(META_filtered$FDR<0.005),])
+  
+
+#load META_B
+B_matrix=as.matrix(META_B)
+
+grset <- makeGenomicRatioSetFromMatrix(
+  mat=B_matrix,rownames=META_B$MarkerName,
+  array = "IlluminaHumanMethylationEPIC",
+  annotation = "ilm10b4.hg19"
+)
+grset_hyper=grset[hyper]
+grset_hypo=grset[hypo]
+grset_nonsig=grset[nonsig]
+
+prop_hyper=data.frame(getIslandStatus(grset_hyper)) #this works too but doesnt give exact number they want
+count_hyper=plyr::count(prop_hyper, "getIslandStatus.grset_hyper.") 
+count_hyper$Percentage=(count_hyper$freq/length(DMPs_to_graph))*100 #bcs removed the ones that were annotated to both, or should divide by 26,525?
+count_hyper$DMPstatus="DMPs"
+count_hyper$DMPstatus2="Hyper"
+
+prop_hypo=data.frame(getIslandStatus(grset_hypo))
+count_hypo=plyr::count(prop_hypo, "getIslandStatus.grset_hypo.") 
+count_hypo$Percentage=(count_hypo$freq/length(DMPs_to_graph))*100 
+count_hypo$DMPstatus="DMPs"
+count_hypo$DMPstatus2="Hypo"
+
+prop_nonDMPS=data.frame(prop.table(table(getIslandStatus(grset_nonsig)))) #proptable only good for dmp vs nondmp, for hyper and hypo need to do manually like did for chrom state
+prop_nonDMPS$Percentage=prop_nonDMPS$Freq*100 
+prop_nonDMPS$DMPstatus="non-DMPs"
+prop_nonDMPS$DMPstatus2="non-DMPs"
+
+colnames(count_hyper)=c("CGIposition","freq","Percentage","DMPstatus","DMPstatus2")
+colnames(count_hypo)=c("CGIposition","freq","Percentage","DMPstatus","DMPstatus2")
+colnames(prop_nonDMPS)=c("CGIposition","freq","Percentage","DMPstatus","DMPstatus2")
+
+island_status_all <- rbind(count_hyper,count_hypo,prop_nonDMPS)
+
+##this is to split by hyper and hypo in island status!
+island_status_all$CGIposition <- factor(island_status_all$CGIposition,levels = c("Island", "Shore", "Shelf", "OpenSea"))#change order on x axis
+
+
+gg=ggplot(data=island_status_all, aes(x=DMPstatus, y=Percentage,fill=DMPstatus2)) + 
+  geom_bar(stat="identity")+
+  facet_grid(~CGIposition)+
+  theme_classic()+
+  scale_fill_manual(values=c("#E31A1C","#1F78B4",'black'))+
+  xlab("")+
+  ylab("Percentage of DMPs or non-DMPs")+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5))+
+  labs(fill = "DMP status")+
+  theme(legend.position = "topright")
+
+
+
+tiff("Island status of DMPs- hyper & hypo.tiff",
+     height = 3,
+     width = 3.5,
+     units = "in",
+     res = 600)
+gg
+dev.off() 
+
+
+
+#chi2 for island status on hyper/hypo/non
+#need to get the counts for nondmps, just reget all so the columns are less, and more organized
+count_hyper=plyr::count(prop_hyper, "getIslandStatus.grset_hyper.") 
+
+count_hypo=plyr::count(prop_hypo, "getIslandStatus.grset_hypo.") 
+
+prop_nonDMPS=data.frame(getIslandStatus(grset_nonsig)) #proptable only good for dmp vs nondmp, for hyper and hypo need to do manually like did for chrom state
+count_nonDMPS=plyr::count(prop_nonDMPS, "getIslandStatus.grset_nonsig.") 
+
+islandchi=cbind(count_hyper,count_hypo,count_nonDMPS)
+
+rownames(islandchi)=islandchi$getIslandStatus.grset_hyper.
+islandchi=islandchi[,c(2,4,6)]
+colnames(islandchi)=c("hyper","hypo","non-DMPs")
+
+#reorder for corrplot
+
+islandchi$islands <- factor(rownames(islandchi),levels = c("Island", "Shore", "Shelf", "OpenSea"))#change order on x axis
+islandchi=arrange(islandchi,islands)
+rownames(islandchi)=islandchi$islands
+colnames(islandchi)=c("hyper","hypo",'non-DMPs')
+islandchi=data.frame(islandchi[,-4])
+
+
+chisq <- chisq.test(islandchi)
+chisq
+library(corrplot)
+corrplot(chisq$residuals, is.cor = FALSE, cl.ratio=0.3,tl.col="black")
+chisq$p.value #p-value < 2.2e-16 chisq$statistic
+
+
+
+# Contibution in percentage (%) #this better for paper
+contrib <- 100*chisq$residuals^2/chisq$statistic
+corrplot(contrib, is.cor = FALSE,cl.ratio=0.3,tl.col="black")
+
+library(openxlsx)
+write.xlsx(gst, "META go region.xlsx", sheetName = "Sheet1",
+          col.names = TRUE, row.names = TRUE, append = FALSE)
+write.xlsx(gst_KEGG, "META go region_KEGG.xlsx", sheetName = "Sheet1",
+           col.names = TRUE, row.names = TRUE, append = FALSE)
+
+
+#Descriptive table
+genesmart_des=merged_pheno %>% 
+  filter(Timepoint=="PRE") %>% 
+  dplyr::select(ID,Age_PRE,sex)
+genesmart_des$Study="Gene SMART"
+colnames(genesmart_des)=c("ID","Age","Sex","Study")
+genesmart_des$Sex=as.character(genesmart_des$Sex)
+genesmart_des[genesmart_des=="female"]<-"Females"
+genesmart_des[genesmart_des=="male"]<-"Males"
+
+
+FUSION_des= FUSION_pheno %>% dplyr::select(SUBJECT_ID,age_biopsy,sex)
+colnames(FUSION_des)=c("ID","Age","Sex")
+FUSION_des$Study="FUSION"
+FUSION_des$Sex=as.character(FUSION_des$Sex)
+FUSION_des[FUSION_des=="F"]<-"Females"
+FUSION_des[FUSION_des=="M"]<-"Males"
+
+GSE38291_des=GSE38291_pheno %>%  dplyr::select(ID,Age,Sex)
+GSE38291_des$Study="GSE38291"  
+GSE38291_des$Sex=as.character(GSE38291_des$Sex)
+GSE38291_des[GSE38291_des=="F"]<-"Females"
+GSE38291_des[GSE38291_des=="M"]<-"Males"
+
+all_des=rbind(genesmart_des,FUSION_des,GSE38291_des)  
+all_des=all_des[,2:4]
+
+library(gtsummary)
+
+table2 <-
+  tbl_summary(
+    all_des,
+    by = Study, # split table by group
+    label = list(Age ~ "Age (years)",Sex~"Sex"),
+    statistic = list(all_continuous() ~ "{mean} ({sd})"),
+    missing = "no" # don't list missing data separately
+  ) %>%
+  #add_n() %>% # add column with total number of non-missing observations
+  #add_p() %>% # test for a difference between groups
+  modify_header(label = "") %>% # update the column header
+  bold_labels()
+table2
+gt::gtsave(as_gt(t1), file = file.path(tempdir(), "temp.png"))
+gt::gtsave(as_gt(table2), file = file.path("/home/e5110554/git/git", "Descriptive table.png"))
+
+
+#heatmap of DMR
+#extract CpGs from DMR of interest (and all)
+cpgsGRB10=names(subsetByOverlaps(annotated_only, newGR[6]))###OH MY GOD THIS IS IT, but must put the object annotated into here  before creating the new cpg annotated object
+
+#try this code from Tim Peters for all DMR CpGs
+allDMRcpgs <- sapply(1:length(newGR), function (x) names(subsetByOverlaps(annotated_only, newGR[x])))
+
+#now heatmap and smoothed means of DMR of interest
+#GENEsmart first
+#plot raw B
+M_merged_QUT_diagen=read.delim("M_merged_QUT_diagen_xhyb.txt")
+Gene_SMART_B=ilogit2(M_merged_QUT_diagen)
+merged_pheno=read.delim("merged_pheno.txt")
+
+beta_cpgs_HDACDMR=Gene_SMART_B[cpgsGRB10,]
+beta_cpgs_HDACDMR_PREs=beta_cpgs_HDACDMR[ , c(FALSE,TRUE) ]#select only even columns which will be PRE
+
+#color by sex
+participant_sex=merged_pheno$sex
+participant_sex=participant_sex[c(FALSE,TRUE)]
+library(plyr)
+color_vector <- revalue(participant_sex,
+                        c("female"="#F8766D","male"="#00BFC4"))
+colnames(beta_cpgs_HDACDMR_PREs)=participant_sex
+library(superheat)
+#make sure all cpgs present, if not remove NA cpgs
+beta_cpgs_HDACDMR_PREs=beta_cpgs_HDACDMR_PREs[-1,]
+#if they are not residuals, must scale
+beta_cpgs_HDACDMR_PREs_scaled_t=scale(t(beta_cpgs_HDACDMR_PREs))
+
+superheat(residuals_HDACS_PREs_t,
+          bottom.label.text.angle = 90,
+          bottom.label.text.size = 4,
+          left.label.text.size = 4,
+          left.label.text.alignment = "right",
+          bottom.label.text.alignment = "right",
+          pretty.order.cols = FALSE,
+          pretty.order.rows = TRUE,
+          row.dendrogram = FALSE,
+          col.dendrogram = FALSE,
+          legend.height = 0.05,
+          left.label.col = color_vector,
+          heat.pal = viridis::magma(100))
+
+
+
+#or if no hierarchies and split by male female
+superheat(residuals_HDACS_PREs_t,
+          bottom.label.text.angle = 90,
+          bottom.label.text.size = 4,
+          bottom.label.text.alignment = "right",
+          pretty.order.cols = FALSE,
+          left.label.size = 0.1,
+          bottom.label.size = 0.03,
+          left.label.text.angle =90,
+          #heat.pal = viridis::magma(100),
+          membership.rows=participant_sex,n.clusters.rows = 2
+)
+#or if already scaled just transpose it so it matches the DMR plot##THIS (flipped from one above)
+residuals_onlyBatch=read.delim("residuals_onlyBatch.txt")
+residuals_HDACS=residuals_onlyBatch[cpgsGRB10,]
+residuals_HDACS_PREs=residuals_HDACS[ , c(FALSE,TRUE) ]#select only even columns which will be PRE
+#residuals_HDACS_PREs=residuals_HDACS_PREs[-1,] #only for this large DMR of GRB10 that first cpg is not in genesmart data
+colnames(residuals_HDACS_PREs)=participant_sex
+residuals_HDACS_PREs_t=t(residuals_HDACS_PREs)
+
+#want to have colors as batch
+batch=as.factor(merged_pheno$batch)
+participant_batch=batch[c(FALSE,TRUE)]
+color_vector <- revalue(participant_batch,
+                        c("2"="#F8766D","1"="#00BFC4"))
+
+#try checking all but first 9
+residuals_HDACS_PREs_t=residuals_HDACS_PREs_t[,1:7]
+
+#do on residuals on all but sex
+#residuals of sex and time for box plot
+merged_pheno$Timepoint=factor(merged_pheno$Timepoint,levels=c("PRE","4WP"))
+design <- model.matrix(~Age_PRE+batch+z_score+Timepoint,
+                       merged_pheno)
+
+corfit <- duplicateCorrelation(M_merged_QUT_diagen,
+                               design,
+                               block = merged_pheno$ID) #watch out this takes 30 min (took 1:50!!!!gr)
+#corfit consensus=0.2526923 for M
+
+
+fit = lmFit(M_merged_QUT_diagen,
+            design,
+            block=merged_pheno$ID,
+            correlation=0.2526923) 
+
+fit2 <- eBayes(fit)
+
+#Beta corfit consensus=0.2526871
+
+fit3 = lmFit(Gene_SMART_B,
+             design,
+             block=merged_pheno$ID,
+             correlation=0.2526871) #I have chosen the option "robust" which will downplay the influence of outliers. This takes significantly more time for your computer to run but is more robust and is always my preference.
+
+fit4 <- eBayes(fit3)
+
+residuals_sex=residuals(fit4,Gene_SMART_B)
+
+#check gse
+GSE38291_M=read.delim('GSE38291_M.txt')
+GSE38291_pheno=read.delim('GSE38291_phenotypes.txt')
+GSE38291_B=ilogit2(GSE38291_M)
+beta_cpgs_HDACDMR=GSE38291_B[cpgsHDAC,]
+
+
+#try FUSION, as i thought those cpgs not there in gse
+FUSION_B=read.delim("FUSION_B_xhyb_removed.txt")
+FUSION_pheno=read.delim("FUSION_phenotypes.txt")
+FUSION_B=ilogit2(FUSION_M)
+
+beta_cpgs_HDACDMR=FUSION_B[cpgsGRB10,]
+
+#color by sex
+participant_sex=FUSION_pheno$sex
+library(plyr)
+color_vector <- revalue(participant_sex,
+                        c("F"="orange","M"="#00BFC4"))
+colnames(beta_cpgs_HDACDMR)=participant_sex
+#if they are not residuals, must scale
+beta_cpgs_HDACDMR_t=scale(t(beta_cpgs_HDACDMR))
+
+#too many participants, cluster by sex (a factoring variable)
+superheat(beta_cpgs_HDACDMR_t,
+          pretty.order.cols = FALSE,
+          left.label.size = 0.1,
+          bottom.label.size = 0.03,
+          left.label.text.angle =90,
+          heat.pal = viridis::magma(100),
+          membership.rows=participant_sex,n.clusters.rows = 2
+)
+
+#add smoothed mean!!! can do through here instead of manual?! kind of manual, and want location..
+Location=annotation[cpgsGRB10,c("CpG_beg","probeID")]
+
+#get cpgs in heatmap in correct location order
+# order=Location$probeID
+# 
+# unordered_heatmap=data.table(beta_cpgs_HDACDMR_PREs_scaled_t)
+# ordered_heatmap=unordered_heatmap[,order]
+# 
+# ordered_heatmap=unordered_heatmap[,order(match(colnames(unordered_heatmap),order))]
+# x[order(match(x,y))]
+
+#bcs one cpg not in gene smart
+Location=Location[-1,]
+
+library(dplyr)
+TBL=as_tibble(beta_cpgs_HDACDMR_PREs,.name_repair = "minimal")
+vector_m=c()
+vector_f=c()
+for (i in 1:nrow(TBL)){
+  males_ave<-rowMeans(TBL[i,which(colnames(TBL)=="male")])
+  females_ave<-rowMeans(TBL[i,which(colnames(TBL)=="female")])
+  vector_m<-c(vector_m,males_ave)
+  vector_f<-c(vector_f,females_ave)
+}
+
+smoothgroupmeans=as.data.frame(Location)
+smoothgroupmeans$Males=vector_m
+smoothgroupmeans$Females=vector_f
+
+Location$combined=paste(Location$CpG_beg,"\n","(",Location$probeID,")")
+
+library(ggplot2)
+gg=ggplot(data = smoothgroupmeans, aes(x = CpG_beg, y = y))+
+  geom_point(aes(y=Males,color="Males"),se=F)+
+  geom_point(aes(y=Females,color="Females"),se=F)+
+  geom_line(aes(y=Males,color="Males"),se=F)+
+  geom_line(aes(y=Females,color="Females"),se=F)+
+  ylab("Methylation (Beta)")+
+  xlab("Chromosomal location of CpGs")+
+  theme_minimal()+
+  scale_x_continuous(breaks=smoothgroupmeans$CpG_beg,labels=Location$combined)+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, size=8))+
+  theme(legend.title=element_blank())+
+  theme(axis.title.y = element_text(size = 11))+
+  theme(axis.title.x = element_text(size = 11))+
+  theme(legend.position = "none")
+  
+tiff("GGT7 DMR smoothed means of raw.tiff",
+     height = 5.5,
+     width = 12,
+     units = "in",
+     res = 600)
+gg
+dev.off()
+
+#do violin plot of those 3 cpgs instead of smoothed means
+GENESMART_B_t=t(Gene_SMART_B)
+cpgs_phenos_GENESMART=cbind(merged_pheno,GENESMART_B_t)
+
+beta_cpgs_HDACDMR=Gene_SMART_B[cpgsGRB10,]
+beta_cpgs_HDACDMR_PREs=beta_cpgs_HDACDMR[ , c(FALSE,TRUE) ]#select only even columns which will be PRE
+beta_cpgs_HDACDMR_PREs_t=data.frame(t(beta_cpgs_HDACDMR_PREs))
+
+participant_sex=merged_pheno$sex
+participant_sex=participant_sex[c(FALSE,TRUE)]
+beta_cpgs_HDACDMR_PREs_t$sex=participant_sex
+
+DMR_longer=pivot_longer(data=beta_cpgs_HDACDMR_PREs_t,
+                               cols=contains("cg"),
+                               names_to = "CpG",
+                               values_to = "DNAm")
+DMR_longer$CpG=factor(DMR_longer$CpG,levels=c("cg05992185","cg08862567","cg04616145"))
+
+gg=ggplot(DMR_longer, aes(x=CpG,
+                       y=DNAm,
+                       fill = sex))+
+  geom_violin()+
+  theme_classic()+
+  theme(legend.title=element_blank())+ #thank youuu penguin data https://datavizpyr.com/grouped-violinplot-with-ggplot2-in-r/
+  theme(legend.position = "none")
+
+tiff("GGT7 DMR violin plots gene smart raw B.tiff",
+     height = 3,
+     width = 5,
+     units = "in",
+     res = 600)
+gg
+dev.off()
+
+#if want to do violin plot for the residuals, but honestly i looks almost the same, and the real B values are more telling and interesting
+beta_cpgs_DMR=residuals_sex[DMR_cpgs,]
+beta_cpgs_DMR_PREs=beta_cpgs_DMR[ , c(FALSE,TRUE) ]#select only even columns which will be PRE
+beta_cpgs_DMR_PREs_t=data.frame(t(beta_cpgs_DMR_PREs))
+
+participant_sex=merged_pheno$sex
+participant_sex=participant_sex[c(FALSE,TRUE)]
+beta_cpgs_DMR_PREs_t$sex=participant_sex
+
+library(dplyr)
+library(tidyverse)
+DMR_longer=pivot_longer(data=beta_cpgs_DMR_PREs_t,
+                        cols=contains("cg"),
+                        names_to = "CpG",
+                        values_to = "DNAm")
+DMR_longer$CpG=factor(DMR_longer$CpG,levels=c("cg05992185","cg08862567","cg04616145"))
+
+gg=ggplot(DMR_longer, aes(x=CpG,
+                          y=DNAm,
+                          fill = sex))+
+  geom_violin()+
+  theme_classic()+
+  theme(legend.title=element_blank())+ #thank youuu penguin data https://datavizpyr.com/grouped-violinplot-with-ggplot2-in-r/
+  theme(legend.position = "none")
+
+#FINAL CODE USED FOR VIOLIN PLOT OF CPGs IN DMR, ended up using raw B
+beta_cpgs_DMR=Gene_SMART_B[DMR_cpgs,]
+beta_cpgs_DMR_PREs=beta_cpgs_DMR[ , c(FALSE,TRUE) ]#select only even columns which will be PRE
+beta_cpgs_DMR_PREs_t=data.frame(t(beta_cpgs_DMR_PREs))
+
+participant_sex=merged_pheno$sex
+participant_sex=participant_sex[c(FALSE,TRUE)]
+beta_cpgs_DMR_PREs_t$sex=participant_sex
+
+library(dplyr)
+library(tidyverse)
+DMR_longer=pivot_longer(data=beta_cpgs_DMR_PREs_t,
+                        cols=contains("cg"),
+                        names_to = "CpG",
+                        values_to = "DNAm")
+DMR_longer$CpG=factor(DMR_longer$CpG,levels=c("cg05992185","cg08862567","cg04616145"))
+
+gg=ggplot(DMR_longer, aes(x=CpG,
+                          y=DNAm,
+                          fill=sex))+
+  geom_violin()+
+  scale_fill_manual(values=c("#FC8D62","#66C2A5"))+
+  theme_classic()+
+  theme(legend.title=element_blank())+ #thank youuu penguin data https://datavizpyr.com/grouped-violinplot-with-ggplot2-in-r/
+  theme(legend.position = "none")+
+  xlab("CpGs in GGT7 DMR")
+
+
+tiff("GGT7 DMR violin plots gene smart raw B.tiff",
+     height = 3,
+     width = 5,
+     units = "in",
+     res = 600)
+gg
+dev.off()
+
+#can do 1 group mean through superheat
+superheat(beta_cpgs_HDACDMR_t,
+          yr = df100$PS,yr.axis.name = "PS",yr.plot.type = "smooth",yr.line.col = "blue4",
+          left.label.size = 0.001,
+          bottom.label.size = 0.001,bottom.label.text.angle =90,
+          heat.pal = viridis::viridis(100)
+)
+
+#the genius line that updates packages when installing new
+update.packages(checkBuilt = TRUE, ask = FALSE)	
+
+
+#for inputting custom track in genome browser
+library(data.table)
+hypergenomeTRACKS= RR_newGR[RR_newGR$meandiff >0,c("seqnames","start","end")]
+colnames(hypergenomeTRACKS)=c("#chrom","chromStart","chromEnd")
+hypogenomeTRACKS= RR_newGR[RR_newGR$meandiff <0,c("seqnames","start","end")]
+colnames(hypogenomeTRACKS)=c("#chrom","chromStart","chromEnd")
+
+write.xlsx(hypogenomeTRACKS, "hypo DMR for genome tracks.xlsx", sheetName = "Sheet1",
+           col.names = TRUE, row.names = TRUE, append = FALSE)
+write.xlsx(hypergenomeTRACKS, "hyper DMR for genome tracks.xlsx", sheetName = "Sheet1",
+           col.names = TRUE, row.names = TRUE, append = FALSE)
+
+#check out grb10 imprinted region
+imprinted=read.delim("CpGs in imprinted regions from Zhou et al_sarah.txt")
+anno_for_imp=annotation %>% dplyr::select (probeID,geneNames,E107,E108)
+imprinted=left_join(imprinted,anno_for_imp,by="probeID")
+GRB10_tracks=imprinted[grepl("GRB10",imprinted$geneNames),1:3] #subset df if contains partial string
+
+df[grepl("t", df$name), , drop = FALSE]
+#gene exp data FUSION
+#bugga do it all over
+
+FUSION_samples=read.delim("FUSION gene exp samples edited.txt",header=FALSE)
+FUSION_pheno=read.delim("FUSION_phenotypes.txt")
+FUSION_counts=read.delim("phs001048.v2.p1.muscle.gene.counts.txt")
+
+#wrangle samples sheet, kept telling me that there were more columns than columns names so did some wrangling
+FUSION_samples=FUSION_samples[,1:13]
+FUSION_samples=FUSION_samples[,-5:-7]
+colnames(FUSION_samples)=FUSION_samples[1,]
+FUSION_samples=FUSION_samples[-1,]
+
+
+#now match these samples to the ones from my meth pheno table
+s<-strsplit(FUSION_pheno$SUBJECT_ID,'S')
+s=unlist(s)
+s=s[c(FALSE,TRUE)]
+FUSION_pheno$newID=s
+
+#do the matching with the pheno
+FUSION_samples_matched=FUSION_samples[FUSION_samples$Subject_ID %in% FUSION_pheno$newID,] #FINALLY HOW TO SIMPLE SUBSET BASED OFF OH APPEARENCE IN A VECTOR, A select those that appear in fusion_pheno
+
+#wrangle the mrna counts file
+rownames(FUSION_counts)=FUSION_counts$gene
+FUSION_counts=FUSION_counts[,-1]
+s<-strsplit(colnames(FUSION_counts),'X')
+s=unlist(s)
+s=s[c(FALSE,TRUE)]
+colnames(FUSION_counts)=s
+
+
+#now match the samples info with the gene expr data
+FUSION_samples_matched_muscle=FUSION_samples_matched[FUSION_samples_matched$Sample_ID %in% colnames(FUSION_counts),]
+
+#now reselect pheno according to matches samples from mrna data
+FUSION_pheno_matched=FUSION_pheno[FUSION_pheno$newID %in% FUSION_samples_matched_muscle$Subject_ID,]
+#some of the overlapping DNA meth and mrna (after processing removals arent the same, so should just have 274, go remove from gene expression NOW grr)
+subset_samples=FUSION_samples_matched_muscle[,1:2]
+colnames(subset_samples)=c("sampleID","newID")
+FUSION_pheno_matched_combo=left_join(FUSION_pheno_matched,subset_samples)
+FUSION_pheno_arranged=arrange(FUSION_pheno_matched_combo,sampleID)
+
+#THERE ARE 7 REPLICATES YEESH, so from 281-->274, average counts for those (with loop)
+duplicateIDs=subset_samples[duplicated(subset_samples$newID),"newID"]
+all_dups=subset_samples[subset_samples$newID %in% duplicateIDs,]
+all_dups=arrange(all_dups,newID)
+
+#manual
+profile1=FUSION_counts[,all_dups$sampleID[1]]
+profile2=FUSION_counts[,all_dups$sampleID[2]]
+profile_14675=cbind(profile1,profile2)
+profile_14675_ave=rowMeans(profile_14675)
+
+profile1=FUSION_counts[,all_dups$sampleID[3]]
+profile2=FUSION_counts[,all_dups$sampleID[4]]
+profile_14805=cbind(profile1,profile2)
+profile_14805_ave=rowMeans(profile_14805)
+
+profile1=FUSION_counts[,all_dups$sampleID[5]]
+profile2=FUSION_counts[,all_dups$sampleID[6]]
+profile_14878=cbind(profile1,profile2)
+profile_14878_ave=rowMeans(profile_14878)
+
+profile1=FUSION_counts[,all_dups$sampleID[7]]
+profile2=FUSION_counts[,all_dups$sampleID[8]]
+profile_16714=cbind(profile1,profile2)
+profile_16714_ave=rowMeans(profile_16714)
+
+profile1=FUSION_counts[,all_dups$sampleID[9]]
+profile2=FUSION_counts[,all_dups$sampleID[10]]
+profile_17881=cbind(profile1,profile2)
+profile_17881_ave=rowMeans(profile_17881)
+
+profile1=FUSION_counts[,all_dups$sampleID[11]]
+profile2=FUSION_counts[,all_dups$sampleID[12]]
+profile_26050=cbind(profile1,profile2)
+profile_26050_ave=rowMeans(profile_26050)
+
+profile1=FUSION_counts[,all_dups$sampleID[13]]
+profile2=FUSION_counts[,all_dups$sampleID[14]]
+profile_28626=cbind(profile1,profile2)
+profile_28626_ave=rowMeans(profile_28626)
+
+all_profiles_manual=cbind(profile_14675_ave,profile_14805_ave,profile_14878_ave,profile_16714_ave,profile_17881_ave,profile_26050_ave,profile_28626_ave)
+
+
+dupnumbers=all_dups$sampleID
+
+
+all_profiles=c()                        
+for (i in 1:13)
+{
+  if (i %% 2 != 0) {
+    profile1=FUSION_counts[,dupnumbers[i]]
+    profile2=FUSION_counts[,dupnumbers[i+1]]
+    profile_comb=cbind(profile1,profile2)
+    profile_ave=rowMeans(profile_comb)
+    all_profiles = cbind(all_profiles,profile_ave)
+  }
+}
+#remove dup from counts
+FUSION_counts_dup_removed= FUSION_counts[,!colnames(FUSION_counts) %in% dupnumbers] #subset those that dont appear in a vector
+
+#rename columns in output of loop and combine with the FUSION_counts_dup_removed
+FUSION_pheno_matched_combo_dup_rem=FUSION_pheno_matched_combo[!duplicated(FUSION_pheno_matched_combo$newID),]
+samp_ID_of_dup_from_pheno=FUSION_pheno_matched_combo_dup_rem[FUSION_pheno_matched_combo_dup_rem$sampleID %in% dupnumbers, 14:15]
+samp_ID_of_dup_from_pheno=arrange(samp_ID_of_dup_from_pheno,newID)
+colnames(all_profiles)=samp_ID_of_dup_from_pheno$sampleID
+
+#combine the counts of the all removed with the new averaged counts
+FUSION_counts_with_dup_new_ave=cbind(FUSION_counts_dup_removed,all_profiles)
+FUSION_counts_overlap_pheno=FUSION_counts_with_dup_new_ave[,colnames(FUSION_counts_with_dup_new_ave) %in% FUSION_pheno_matched_combo_dup_rem$sampleID]
+
+#now just put the two of them in the same order, had to be by sampleID
+FUSION_pheno_final=arrange(FUSION_pheno_matched_combo_dup_rem,sampleID)
+library(data.table)
+FUSION_counts_final=setcolorder(FUSION_counts_overlap_pheno,FUSION_pheno_final$sampleID) #put columns in order as another vector
+#to reorder columns in the messy way:
+#FUSION_mRNA_matched_t=as.data.frame(t(FUSION_mRNA_matched))
+#FUSION_mRNA_matched_t$ID=rownames(FUSION_mRNA_matched_t)
+#FUSION_mRNA_matched_t=arrange(FUSION_mRNA_matched_t,ID)
+#FUSION_mRNA_matched_final=t(FUSION_mRNA_matched_t)
+#FUSION_mRNA_matched_final=FUSION_mRNA_matched_final[-nrow(FUSION_mRNA_matched_final),]
+#rownames(FUSION_mRNA_matched_final)=FUSION_mRNA$gene
+
+
+#oh my god thats it they are in order and i did it.
+write.table(FUSION_pheno_final,
+            file="FUSION_pheno_final.txt",
+            quote = FALSE,
+            row.names = TRUE,
+            col.names = TRUE,
+            sep="\t")
+
+write.table(FUSION_counts_final,
+            file="FUSION_counts_final.txt",
+            quote = FALSE,
+            row.names = TRUE,
+            col.names = TRUE,
+            sep="\t")
+
+FUSION_counts_final=read.delim("FUSION_counts_final.txt")                               
+FUSION_pheno_final=read.delim("FUSION_pheno_final.txt")
+
+library(edgeR)
+#plot MDS
+group=FUSION_pheno_final$sex
+plotMDS(FUSION_counts_final, col = as.numeric(group))
+
+#Specify the model to be fitted. We do this before using voom since voom uses variances of the model residuals (observed - fitted)
+#The above specifies a model where each coefficient corresponds to a group mean 
+design=model.matrix(~age_biopsy+sex+bmi+smoke_current+ogtt_status, #adjust for BMI
+                    FUSION_pheno_final)
+
+d0 <- DGEList(FUSION_counts_final)
+
+d0 <- calcNormFactors(d0)
+
+cutoff <- 1
+drop <- which(apply(cpm(d0), 1, max) < cutoff)
+d <- d0[-drop,] 
+dim(d) # number of genes left
+
+
+
+y <- voom(d, design, plot = T)
+fit <- lmFit(y, design)
+head(coef(fit))
+
+fit2 <- eBayes(fit)
+
+top.table <- topTable(fit2,
+                      n = nrow(d),
+                      coef = "sexM",
+                      p.value = 0.005)
+
+
+#remove the suffix
+s<-sub("\\..*", "", rownames(top.table))
+top.table$ensembl_gene_id=s 
+top.table$orig_geneID=rownames(top.table)
+
+#now, figure out what genes are these ensembl IDs (See this, although figured it out on my own before saw this :) :https://www.biostars.org/p/302441/)
+library(biomaRt)
+# define biomart object
+mart <- useMart(biomart = "ensembl", dataset = "hsapiens_gene_ensembl")
+# query biomart
+results <- getBM(attributes = c("chromosome_name","external_gene_name","ensembl_gene_id"),
+                 filters = "ensembl_gene_id", values = top.table$ensembl_gene_id,
+                 mart = mart)
+
+top.table=left_join(top.table,results)
+
+top.table_noXY=top.table %>% filter(chromosome_name!="X")%>% filter(chromosome_name!="Y")
+top.table_noXY$ilog2exp=ilogit2(top.table_noXY$AveExpr)
+
+gtex_overlap_fusion=top.table_noXY[is.element(top.table_noXY$external_gene_name, intersect(top.table_noXY$external_gene_name,sexDE_anno$external_gene_name)),]
+DMG_DEG_overlap_fusion=top.table_noXY[is.element(top.table_noXY$external_gene_name, intersect(top.table_noXY$external_gene_name,genes_DMR_GTEX_overlap)),]
+metab_DMG_overlap_fusion=top.table_noXY[is.element(top.table_noXY$external_gene_name, intersect(top.table_noXY$external_gene_name,metgenes_overlap_DMG$gene)),]
+GTEX_metab_DMG_fusion=metab_DMG_overlap_fusion[is.element(metab_DMG_overlap_fusion$external_gene_name, intersect(metab_DMG_overlap_fusion$external_gene_name,sexDE_anno$external_gene_name)),]
+
+#get the list of OVERLAPPING GENES from FUSION, GTEX, DMRs-->and get all info for them (add effect size of methylation?)
+OVERLAPPING_GENES=inner_join(DMR_GTEX_overlap,top.table_noXY,by="external_gene_name")
+#now use this to add max DMP ES
+
+library(openxlsx)
+write.xlsx(DMG_DEG_overlap_fusion, "DMG_DEG_overlap_fusion.xlsx", sheetName = "Sheet1",
+           col.names = TRUE, row.names = TRUE, append = FALSE)
+
+#boxplots of DE FUSION, check the exact gene id in top.table
+FUSION_counts_final_t=t(FUSION_counts_final)
+phenos_combined_counts_FUSION=cbind(FUSION_pheno_final,FUSION_counts_final_t)
+boxplot(phenos_combined_counts_FUSION[,"ENSG00000131067.12"]~phenos_combined_counts_FUSION$sex,xlab="",ylab="GTDC1 expression",main="FUSION")
+#nicer boxplot
+ggboxplot(phenos_combined_counts_FUSION, x = "sex", y = "ENSG00000131067.12", 
+          fill = "sex", 
+          ylab = "GGT7 expression FUSION", xlab = "")
+
+
+#plot the FPKMs
+FUSION_FPKM=read.delim("phs001048.v2.p1.muscle.gene.fpkm.txt")
+rownames(FUSION_FPKM)=FUSION_FPKM$gene
+FUSION_FPKM=FUSION_FPKM[,-1]
+
+s<-strsplit(colnames(FUSION_FPKM),'X')
+s=unlist(s)
+s=s[c(FALSE,TRUE)]
+colnames(FUSION_FPKM)=s
+
+# s<-strsplit(colnames(FUSION_counts_final),'X')
+# s=unlist(s)
+# s=s[c(FALSE,TRUE)]
+# colnames(FUSION_counts_final)=s
+
+FUSION_FPKM=FUSION_FPKM[,colnames(FUSION_FPKM)%in%colnames(FUSION_counts_final)]
+FUSION_FPKM_final=setcolorder(FUSION_FPKM,FUSION_pheno_final$sampleID)
+
+FUSION_FPKM_final_t=t(FUSION_FPKM_final)
+phenos_combined_FPKM_FUSION=cbind(FUSION_pheno_final,FUSION_FPKM_final_t)
+
+##bcs setcolorder not working just above
+FUSION_FPKM_t=t(FUSION_FPKM)
+FUSION_FPKM_t=data.frame(FUSION_FPKM_t)
+FUSION_FPKM_t$sampleID=rownames(FUSION_FPKM_t)
+FUSION_FPKM_t$sampleID=as.numeric(FUSION_FPKM_t$sampleID)
+phenos_combined_FPKM_FUSION=left_join(FUSION_pheno_final,FUSION_FPKM_t,by="sampleID")
+
+phenos_combined_FPKM_FUSION$sex=factor(phenos_combined_FPKM_FUSION$sex)
+
+
+gg=ggviolin(phenos_combined_FPKM_FUSION, x = "sex", y = "ENSG00000131067.12", 
+             fill = "sex", 
+            palette = c("#FC8D62", "#66C2A5"),
+             ylab = "GGT7 expression FUSION (FPKM)", xlab = "",   legend = "none",add="boxplot")+
+  rremove("legend")+
+  rremove("x.text")+
+  rremove("x.ticks")+
+  font("y.text", color = "grey29")
+
+
+
+tiff("GGT7 expression FUSION (FPKM) violin.tiff",
+     height = 3.5,
+     width = 2.5,
+     units = "in",
+     res = 600)
+gg
+dev.off()
+
+#now ALDH1A1
+gg=ggviolin(phenos_combined_FPKM_FUSION, x = "sex", y = "ENSG00000165092.8", 
+            fill = "sex", 
+            palette = c("#FC8D62", "#66C2A5"),
+            ylab = "ALDH1A1 expression FUSION (FPKM)", xlab = "",   legend = "none",add="boxplot")+
+  rremove("legend")+
+  rremove("x.text")+
+  rremove("x.ticks")+
+  font("y.text", color = "grey29")
+
+tiff("ALDH1A1 expression FUSION (FPKM) violin.tiff",
+     height = 3.5,
+     width = 2.5,
+     units = "in",
+     res = 600)
+gg
+dev.off()
+
+#now FOXO3
+gg=ggviolin(phenos_combined_FPKM_FUSION, x = "sex", y = "ENSG00000118689.10", 
+            fill = "sex", 
+            palette = c("#FC8D62", "#66C2A5"),
+            ylab = "FOXO3 expression FUSION (FPKM)", xlab = "",   legend = "none",add="boxplot")+
+  rremove("legend")+
+  rremove("x.text")+
+  rremove("x.ticks")+
+  font("y.text", color = "grey29")
+
+tiff("FOXO3 expression FUSION (FPKM) violin.tiff",
+     height = 3.5,
+     width = 2.5,
+     units = "in",
+     res = 600)
+gg
+dev.off()
+
+
+#get medians of FPKM for FUSION DE
+library(dplyr)
+
+medians=setDT(phenos_combined_FPKM_FUSION)[,list(Mean=mean(ENSG00000131067.12), Max=max(ENSG00000131067.12), Min=min(ENSG00000131067.12), Median=as.numeric(median(ENSG00000131067.12)), Std=sd(ENSG00000131067.12)), by=sex]
+
+#little histogram of effect sizes in males vs females
+FEMALE_DNAm=results_sex[results_sex$BetaEffectSize<0,"BetaEffectSize"]
+MALE_DNAm=results_sex[results_sex$BetaEffectSize>0,"BetaEffectSize"]
+FEMALE_DNAm$BetaEffectSize=abs(FEMALE_DNAm$BetaEffectSize)
+FEMALE_DNAm$Sex="female-biased"
+MALE_DNAm$Sex="male-biased"
+
+EffectSize_DNAm=rbind(FEMALE_DNAm,MALE_DNAm)
+
+#gtex
+DMR_GTEX_overlap=sexDE_anno[is.element(sexDE_anno$external_gene_name,intersect(sexDE_anno$external_gene_name,DMRgenes_unique)),]
+FEMALE_exp=DMR_GTEX_overlap[DMR_GTEX_overlap$effsize<0,"effsize"]
+MALE_exp=DMR_GTEX_overlap[DMR_GTEX_overlap$effsize>0,"effsize"]
+FEMALE_exp$effsize=abs(FEMALE_exp$effsize)
+FEMALE_exp$Sex="female-biased"
+MALE_exp$Sex="male-biased"
+
+EffectSize_exp=rbind(FEMALE_exp,MALE_exp)
+
+#FUSION rnaseq
+FUSION_olap_DMG=top.table_noXY[is.element(top.table_noXY$external_gene_name,intersect(top.table_noXY$external_gene_name,DMRgenes_unique)),]
+FEMALE_exp=FUSION_olap_DMG[FUSION_olap_DMG$logFC<0,1:2]
+MALE_exp=FUSION_olap_DMG[FUSION_olap_DMG$logFC>0,1:2]
+FEMALE_exp$logFC=abs(FEMALE_exp$logFC)
+FEMALE_exp$Sex="female-biased"
+MALE_exp$Sex="male-biased"
+
+EffectSize_exp=rbind(FEMALE_exp,MALE_exp)
+
+
+
+ggplot(EffectSize_exp,aes(x=effsize,fill=Sex))+
+  geom_density(alpha = 0.4)+
+  ggtitle("Density plot of FUSION exp effect sizes")+
+  theme_minimal()+
+  coord_cartesian(xlim = c(0.5, 2),ylim = c(0,0.23))
+
+#Sample data
+dat <- data.frame(dens = c(rnorm(100), rnorm(100, 10, 5))
+                  , lines = rep(c("a", "b"), each = 100))
+#Plot.
+ggplot(dat, aes(x = dens, fill = lines)) + geom_density(alpha = 0.5)
+
+#how to determine DMR threshold, loosen DMP threshold to 0.1, then overlap DMPs with CpGs in DMRs, then do the same but with different threshold
+#for C=3,min.cpgs = 2,lambda=650, there is 77.5% of cpgs in DMRs that are also DMPs
+loosenedDMPs=META_filtered[META_filtered$FDR<0.005,] #length=112,856
+allDMRcpgs_unlisted=unlist(allDMRcpgs) #length=34,566
+DMP_DMRcpgs_overlap=loosenedDMPs[loosenedDMPs$MarkerName %in% allDMRcpgs_unlisted,] 
+
+#newGR=results.ranges_only2[results.ranges_only2@elementMetadata$Stouffer <0.005&results.ranges_only2@elementMetadata$HMFDR <0.005&results.ranges_only2@elementMetadata$Fisher<0.005]
+
+
+nrow(DMP_DMRcpgs_overlap)/length(allDMRcpgs_unlisted) #length=25581 which is 61.8% of DMR cpgs are DMPs
+
+#to play with
+DMR_only <- dmrcate(annotated_only_Canno,
+                    C=12,
+                    min.cpgs = 2,
+                    lambda=500) #minimum number of CpGs for a region to be a DMR
+
+results.ranges_only <- extractRanges(DMR_only,
+                                     genome = "hg38") #2009 annotation of the human genome was hg19 and the 2013 annotation is hg38
+
+results.ranges_only_0.005=results.ranges_only[results.ranges_only@elementMetadata$Stouffer <0.005&results.ranges_only@elementMetadata$HMFDR <0.005&results.ranges_only@elementMetadata$Fisher<0.005]
+
+allDMRcpgs_2 <- sapply(1:length(results.ranges_only_0.005), function (x) names(subsetByOverlaps(annotated_only, results.ranges_only_0.005[x])))
+allDMRcpgs_unlisted_2=unlist(allDMRcpgs_2)
+
+#for C=2, min cpgs=2, lambda=1000 (default)
+DMP_DMRcpgs_overlap=loosenedDMPs[loosenedDMPs$MarkerName %in% allDMRcpgs_unlisted_2,] 
+nrow(DMP_DMRcpgs_overlap)/length(allDMRcpgs_unlisted_2)#length=25911 (div by 48639) which is 53.3% of DMR cpgs are DMPs
+
+#for C=4, min cpgs=2, lambda=1000
+DMP_DMRcpgs_overlap=loosenedDMPs[loosenedDMPs$MarkerName %in% allDMRcpgs_unlisted_2,] 
+nrow(DMP_DMRcpgs_overlap)/length(allDMRcpgs_unlisted_2)#53.3%
+
+#for C=4, min cpgs=2, lambda=650; 81%
+DMP_DMRcpgs_overlap=loosenedDMPs[loosenedDMPs$MarkerName %in% allDMRcpgs_unlisted_2,] 
+nrow(DMP_DMRcpgs_overlap)/length(allDMRcpgs_unlisted_2)
+
+#take a look at the DMRs
+RR_0.005 <-as.data.frame (results.ranges_only_0.005)
+
+#play around and manually check some heatmaps
+cpgsGRB10=names(subsetByOverlaps(annotated_only, results.ranges_only_0.005[383]))###OH MY GOD THIS IS IT, but must put the object annotated into here  before creating the new cpg annotated object
+participant_sex=merged_pheno$sex
+participant_sex=participant_sex[c(FALSE,TRUE)]
+library(plyr)
+color_vector <- revalue(participant_sex,
+                        c("female"="#F8766D","male"="#00BFC4"))
+
+#or if already scaled just transpose it so it matches the DMR plot##THIS (flipped from one above)
+residuals_onlyBatch=read.delim("residuals_onlyBatch.txt")
+residuals_HDACS=residuals_onlyBatch[cpgsGRB10,]
+residuals_HDACS_PREs=residuals_HDACS[ , c(FALSE,TRUE) ]#select only even columns which will be PRE
+#residuals_HDACS_PREs=residuals_HDACS_PREs[-1,] #only for this large DMR of GRB10 that first cpg is not in genesmart data
+colnames(residuals_HDACS_PREs)=participant_sex
+residuals_HDACS_PREs_t=t(residuals_HDACS_PREs)
+
+
+superheat(residuals_HDACS_PREs_t,
+          bottom.label.text.angle = 90,
+          bottom.label.text.size = 4,
+          left.label.text.size = 4,
+          left.label.text.alignment = "right",
+          bottom.label.text.alignment = "right",
+          pretty.order.cols = FALSE,
+          pretty.order.rows = TRUE,
+          row.dendrogram = FALSE,
+          col.dendrogram = FALSE,
+          legend.height = 0.05,
+          left.label.col = color_vector,
+          heat.pal = viridis::magma(100))
+
+#want to have colors as batch
+batch=as.factor(merged_pheno$batch)
+participant_batch=batch[c(FALSE,TRUE)]
+color_vector <- revalue(participant_batch,
+                        c("2"="#F8766D","1"="#00BFC4"))
+
+#colnames as ID
+ID=merged_pheno$ID
+ID=ID[c(FALSE,TRUE)]
+colnames(residuals_HDACS_PREs)=ID
+
+#check if I have cross-hybridizing probes with x chrom and thats the whole reasoni have hypermeth in femalessss! 
+cross_hyb_probes=read.delim("cross-hybridizing_probes.txt",header = TRUE)
+s=substr(cross_hyb_probes$X.match47.match48.match49.match50.Total,1,10)
+cross_hyb_probes$probeID=s
+#to see all cpgs included in analysis
+rownames(META_filtered)=META_filtered$MarkerName
+META_filtered_filtered=META_filtered[!(rownames(META_filtered) %in% cross_hyb_probes$probeID),] #to see out of all CpGs included in analysis
+#before was 690569 Cpgs now its 687765 (removed 2804)
+
+#to filter them out of the DMPs
+DMPs_xyfilter=META_filtered_filtered[META_filtered_filtered$FDR<0.005,]
+#or
+rownames(results_sex)=results_sex$MarkerName
+DMPs_xyfilter=results_sex[!(rownames(results_sex) %in% cross_hyb_probes$probeID),]
+
+#power calc for PCRs, on count data
+FUSION_counts_final_t_df=data.frame(t(FUSION_counts_final))
+sd(FUSION_counts_final_t_df$ENSG00000131067.12)
+fem_fusion_counts=FUSION_counts_final_t_df[FUSION_pheno_final$sex=="F",]
+male_fusion_counts=FUSION_counts_final_t_df[FUSION_pheno_final$sex=="M",]
+
+#on tpm data
+FUSION_mRNA_matched_final_df=as.data.frame(FUSION_mRNA_matched_final)
+fem_fusion_mRNA=FUSION_mRNA_matched_final_df[FUSION_pheno_final$sex=="F",]
+male_fusion_mRNA=FUSION_mRNA_matched_final_df[FUSION_pheno_final$sex=="M",]
+
+shapiro.test(fem_fusion_counts$ENSG00000131067.12) 
+shapiro.test(male_fusion_counts$ENSG00000131067.12) 
+
+
+var(fem_fusion_mRNA$ENSG00000131067.12)
+var(male_fusion_counts$ENSG00000131067.12) 
+
+ggplot(FUSION_counts_final_t_df, aes(x=ENSG00000068024.12)) +
+  geom_density(aes(group=FUSION_pheno_final$sex,
+                   fill=FUSION_pheno_final$sex),alpha=0.25)
+
+#simulation loop to check for DE among fusion with 20 random males and females
+
+#1.split "M" into male and female
+fem_fusion_counts=FUSION_counts_final_t_df[FUSION_pheno_final$sex=="F",]
+male_fusion_counts=FUSION_counts_final_t_df[FUSION_pheno_final$sex=="M",]
+
+#2. randomly select 20 M and 20 f
+females_20_sampled_t=sample (as.data.frame(t(fem_fusion_counts)), size=80, replace =F)
+males_20_sampled_t=sample (as.data.frame(t(male_fusion_counts)), size=80, replace =F)
+
+
+#3. combine "M" of f and m
+sampled_40=cbind(females_20_sampled_t,males_20_sampled_t)
+
+#4. select those from pheno
+phenos_40=FUSION_pheno_final[FUSION_pheno_final$sampleID %in% colnames(sampled_40),]
+
+#5. arrange pheno and "M"
+phenos_40=arrange(phenos_40,sampleID)
+exp_40=setcolorder(sampled_40,phenos_40$sampleID)
+
+#6. select just the 5 genes I did PCR for
+primers=c("ALDH1A1","DEPTOR","FOXO3","GGT7","GRB10") #go run the top.table code to get orig gene IDs and gene names (must get extracted by removing suffix)
+primers_ENS=top.table[top.table$external_gene_name %in% primers,"orig_geneID"]
+exp_40_top5s=exp_40[primers_ENS,]
+
+#7. now run limma!
+group=phenos_40$sex
+plotMDS(exp_40, col = as.numeric(group))
+design=model.matrix(~age_biopsy+sex+bmi+smoke_current+ogtt_status, #adjust for BMI
+                    phenos_40)
+
+d0 <- DGEList(exp_40)
+
+d0 <- calcNormFactors(d0)
+
+cutoff <- 1
+drop <- which(apply(cpm(d0), 1, max) < cutoff)
+d <- d0[-drop,] 
+dim(d) # number of genes left
+
+
+
+y <- voom(d , design, plot = T)
+fit <- lmFit(y, design)
+head(coef(fit))
+
+fit2 <- eBayes(fit)
+
+top.table <- topTable(fit2,
+                      n = nrow(d),
+                      coef = "sexM",
+                      p.value = 0.005)
+
+#extract
+top5s=top.table[primers_ENS,]
+
+#try GSEA with Reactome using miss methyl
+library(methylGSA)
+cpg.pval=META_filtered_noXYfem$P.value
+names(cpg.pval)=META_filtered_noXYfem$MarkerName
+#remove the 0 cg pval one to see smallest p val
+cpg.pval=cpg.pval[-235880]##reg
+cpg.pval=cpg.pval[-64680]###noXY
+#now replace that 0 one with the lowest possible p val determined by checking new range
+replace(cpg.pval, cpg.pval==0, 1.31e-268) #not working this way, just remove that on cpg
+
+Reactome=methylgometh(cpg.pval, sig.cut = 0.001, topDE = NULL,
+             array.type = "EPIC", GS.list = NULL, GS.idtype = "SYMBOL",
+             GS.type = "Reactome", minsize = 100, maxsize = 500)
+
+#do the same but for the cpgs in DMRs (thats how goregion does it), from above code allDMRcpgs_unlisted
+cpg.pval=META_filtered[allDMRcpgs_unlisted,"P.value"]
+names(cpg.pval)=allDMRcpgs_unlisted
+which(cpg.pval==0)
+cpg.pval=cpg.pval[-5]
+ReactomeDMRcgs=methylgometh(cpg.pval, sig.cut = 0.001, topDE = NULL,
+                      array.type = "EPIC", GS.list = NULL, GS.idtype = "SYMBOL",
+                      GS.type = "Reactome", minsize = 100, maxsize = 500)
+
+#apparently cpg.pval should be all cpgs tested as in gsameth, try using gsameth but providing reactome pathway lists as gene set from methylGSA, that was can also get sig genes in set
+library(IlluminaHumanMethylationEPICanno.ilm10b4.hg19)
+library(stringr)
+library(org.Hs.eg.db)
+library(dplyr)
+#wait fixed getannot!!
+library(methylGSA)
+tempAnnot= methylGSA:::getAnnot("EPIC")
+
+temp = unique(tempAnnot$UCSC_RefGene_Name)
+
+library(AnnotationDbi)
+minsize=100
+maxsize=500
+gene.entrez = suppressMessages(
+  AnnotationDbi::select(org.Hs.eg.db, temp, columns = "ENTREZID",
+         keytype = "SYMBOL")$ENTREZID)
+reactome.df = suppressMessages(
+  AnnotationDbi::select(reactome.db, gene.entrez, columns = "REACTOMEID",
+         keytype = "ENTREZID"))
+reactome.df = na.omit(reactome.df)
+reactom2entrez = reactome.df$ENTREZID
+names(reactom2entrez) = reactome.df$REACTOMEID
+reactome.list = split(reactom2entrez, names(reactom2entrez))
+reactome.list.sizes = vapply(reactome.list, length, FUN.VALUE = 1)
+reactome.list.sub =
+  reactome.list[
+    reactome.list.sizes>=minsize & reactome.list.sizes<=maxsize]
+gsaREACTOME_DMPs_orig=gsameth(sig.cpg=DMPs$MarkerName,
+                all.cpg = META_filtered$MarkerName,
+                collection = reactome.list.sub,
+                array.type = "EPIC",
+                plot.bias = TRUE,
+                prior.prob = TRUE,
+                anno = NULL,
+                equiv.cpg = TRUE,
+                fract.counts = TRUE,
+                sig.genes = TRUE
+) 
+
+#add reactome desciprtion to pathway (from methylGSA github, nice one!)
+Description = getDescription(rownames(gsaREACTOME_DMPs_orig), "Reactome")
+gsaREACTOME_DMPs_orig = cbind(Description, gsaREACTOME_DMPs_orig)
+
+#now that have GSEA of DMRs and DMPs for KEGG, GO, and Reactome, try to
+#1. extract genes in set for top 10 pathways in each (for DMR)
+#2. filter overlapping genes from each
+#3. Sankey
+
+#try 1 from each (Muscle contraction)
+Muscle_contraction_Reactome=unlist(strsplit(gsaREACTOME["R-HSA-397014","SigGenesInSet"], ","))
+Muscle_contraction_GO=unlist(strsplit(gometh_GO["GO:0006936","SigGenesInSet"], ","))
+Muscle_contraction_KEGG=unlist(strsplit(gometh_KEGG["path:hsa04810","SigGenesInSet"], ","))
+
+
+Reactome_genes_overlap_overlapping=OVERLAPPING_GENES_final[OVERLAPPING_GENES_final$`Gene name` %in% Muscle_contraction_Reactome,c(3,8)]
+GO_genes_overlap_overlapping=OVERLAPPING_GENES_final[OVERLAPPING_GENES_final$`Gene name` %in% Muscle_contraction_GO,c(3,8)]
+KEGG_genes_overlap_overlapping=OVERLAPPING_GENES_final[OVERLAPPING_GENES_final$`Gene name` %in% Muscle_contraction_KEGG,c(3,8)]
+
+OLAP_Reactome_GO=GO_genes_overlap_overlapping[GO_genes_overlap_overlapping$`Gene name` %in% Reactome_genes_overlap_overlapping$`Gene name`,]
+OLAP_Reactome_GO_KEGG=OLAP_Reactome_GO[OLAP_Reactome_GO$`Gene name` %in% KEGG_genes_overlap_overlapping$`Gene name`,]
+
+Reactome_genes_overlap_overlapping$GSEA="Reactome: Muscle contraction"
+GO_genes_overlap_overlapping$GSEA="GO: Muscle contraction"
+KEGG_genes_overlap_overlapping$GSEA= "KEGG: Regulation of actin cytoskeleton"
+
+#PCR results graphing
+DeltaCts=read_excel("DeltaCts_for_graphing.xlsx",sheet=3)
+DeltaCts$expressionALDH1A1=2^-DeltaCts$ALDH1A1_ct
+DeltaCts$logexp=log(DeltaCts$expressionALDH1A1)
+
+#ggplot(DeltaCts, aes(sex, expressionALDH1A1)) +
+ # geom_point(aes(col=sex),size=0.8,position = "jitter")+
+  #labs(x="",y="Expression level ALDH1A1 (2-deltaCt")+
+  #theme_minimal()+
+  #theme(legend.position = "none")
+  
+
+#ggplot(DeltaCts,aes(x=sex,y=expressionALDH1A1,color=sex))+
+#  ylab("GGT7 expression Gene SMART (AU)")+
+#  xlab("")+
+#  geom_jitter(width=0.08)+
+  #geom_bar(stat="identity")+
+  # theme_minimal() +
+  # scale_color_manual(values=c("#FC8D62","#66C2A5"))+
+  # rremove("x.text")+
+  # rremove("x.ticks")+
+  # theme(legend.title=element_blank())
+  
+#dots and violin together
+g=ggplot(DeltaCts,aes(x=sex,y=expressionALDH1A1,fill=sex)) +
+  geom_violin(position = position_dodge(width = 0.9)) +
+  geom_point(position = position_jitterdodge(seed = 1, dodge.width = 0.8))+
+  ylab("ALDH1A1 expression Gene SMART (AU)")+
+  xlab("")+
+  theme_classic() +
+  scale_fill_manual(values=c("#FC8D62","#66C2A5"))+
+  rremove("x.text")+
+  rremove("x.ticks")+
+  theme(legend.title=element_blank())
+
+tiff("qPCR ALDH1A1.tiff",
+     height = 3.5,
+     width = 4,
+     units = "in",
+     res = 600)
+g
+dev.off()
+
+#check overlap of overlapping genes with myotube myoblast study
+myoblasts_myotubes=read_excel("Myoblasts_myotubes_results.xlsx")
+myoblasts_myotubes_genes = unique(unlist(strsplit(myoblasts_myotubes$UCSC_REFGENE_NAME,split=";")))
+overlap_with_myos=OVERLAPPING_GENES_final[OVERLAPPING_GENES_final$`Gene name` %in% myoblasts_myotubes_genes,]  
+#92 of 324 were overlapping 28%, including GRB10, HDAC4, GGT7, FOXO3
+cpgs_overlap_with_myos=DMPs[DMPs$MarkerName %in% myoblasts_myotubes$ILMNID,] #766 cpgs
+
+##piece of code from Sarah
+#how to check number of sites annotated to each gene, 
+DMG_tot = unique(unlist(strsplit(meta_res_robust$`Annotated gene(s)`,split=";")))
+DMG_tot = DMG_tot[!is.na(DMG_tot)]
+DMG_tot_multiple = tibble(gene = unlist(strsplit(meta_res_robust$`Annotated gene(s)`,split=";")))
+DMG_tot_count <- DMG_tot_multiple %>%
+  group_by(gene) %>%
+  summarise(n = n()) %>%
+  arrange(desc(n))
+
+##how topick an EXACT gene by setting boundaries
+DMG = unique(unlist(strsplit(DMRs$`Annotated gene(s)`,split=";")))
+DMG = DMG[!is.na(DMG)]
+DMG_multiple = tibble(gene = unlist(strsplit(DMRs$`Annotated gene(s)`,split=";")))
+DMG_count <- DMG_multiple %>%
+  group_by(gene) %>%
+  dplyr::summarise(n = n()) %>%
+  arrange(desc(n))
+DMG_count <- na.omit(DMG_count)
+genetolookfor <- paste0("\\b",input$gene,"\\b")
+indexgene <- grep(genetolookfor,
+                  meta_res_robust$`Annotated gene(s)`)
+
+
+
+#TFBS from paper 2, but now for meta results
+#select the anno of all CpGs used in the analysis
+all_cpgs=annotation[annotation$probeID %in% META_M$MarkerName,]
+#turn this into a Granges object with the correct column names
+userUniverse=makeGRangesFromDataFrame(all_cpgs,
+                                      keep.extra.columns=FALSE,
+                                      ignore.strand=FALSE,
+                                      seqinfo=NULL,
+                                      seqnames.field=c("CpG_chrm"),
+                                      start.field="CpG_beg",
+                                      end.field=c("CpG_end"),
+                                      strand.field="probe_strand",
+                                      starts.in.df.are.0based=FALSE)
+#convert to df
+userUniverse_df=as.data.frame(userUniverse)
+#save as bed file
+write.table(userUniverse_df, file="background.bed", quote=F, sep="\t", row.names=F, col.names=F)
+#repeat for the CpGs in my DMRs (*must do CpGs in DMRS as opposed to DMR regions, wont work that way)
+allDMRcpgs <- sapply(1:length(newGR), function (x) names(subsetByOverlaps(annotated_only, newGR[x]))) #run dmrcate, filter for DMRs<0.005
+allDMRcpgs_unlisted=unlist(allDMRcpgs) #36511 cpgs in DMRs
+DMRcpgs_anno=annotation[allDMRcpgs_unlisted,]
+userSets=makeGRangesFromDataFrame(DMRcpgs_anno,
+                                  keep.extra.columns=FALSE,
+                                  ignore.strand=FALSE,
+                                  seqinfo=NULL,
+                                  seqnames.field=c("CpG_chrm"),
+                                  start.field="CpG_beg",
+                                  end.field=c("CpG_end"),
+                                  strand.field="probe_strand",
+                                  starts.in.df.are.0based=FALSE)
+userSets_df=as.data.frame(userSets)
+write.table(userSets_df, file="CpGsinDMRs.bed", quote=F, sep="\t", row.names=F, col.names=F)
+#go to unibind.com, to Experiment analysis and upload the bed files (userSets=regions of interest and userUniverse=background)
+
+#load all enrichments to count number of TFs enriched and total
+setwd("~/git/study 1")
+allEnrichments=read.delim("allEnrichments.tsv")
+uniqueTF=unique(allEnrichments$collection) #268 unique TF
+signficantTF=allEnrichments[allEnrichments$pValueLog>2.995732,]
+uniquesigTF=unique(signficantTF$collection)
+#try tim peters cpg annotate as he wants it
+myannotation <- cpg.annotate("array", tcell, arraytype = "EPIC",
+                             analysis.type="differential", design=design, coef=2)
+
+
+
+#now load and p adjust and check for association with FT in each sex
+females_corrected=read.delim("FUSION_females_FT_corrected.tbl")
+females_corrected$FDR=p.adjust(females_corrected$PVALUE_CORR,method="BH")
+sig_Females_bacon=females_corrected[females_corrected$FDR<0.005,] #711 DMPs with FT in females bacon
+sig_Females_nobacon=females_corrected[females_corrected$adj.P.Val<0.005,] #859 DMPs with FT in males no bacon
+
+males_corrected=read.delim("FUSION_males_FT_corrected.tbl")
+males_corrected$FDR=p.adjust(males_corrected$PVALUE_CORR,method="BH")
+sig_males_bacon=males_corrected[males_corrected$FDR<0.005,] #1177 DMPs with FT in males bacon
+sig_males_nobacon=males_corrected[males_corrected$adj.P.Val<0.005,] #4009 DMPs with FT in males no bacon
+
+#and check for association with FT in each sex across sex DMPs
+setwd("~/git/study 1")
+sexDMPs=read_excel("Supplementary table DMPs.xlsx")
+
+sex_DMPs_males=males_corrected[males_corrected$cpg %in% sexDMPs$MarkerName,]
+sex_DMPs_males$sexDMPFDR=p.adjust(sex_DMPs_males$PVALUE_CORR)
+males_sexDMPs_sig=sex_DMPs_males[sex_DMPs_males$sexDMPFDR<0.005,]#111 sexDMPs with FT in males bacon
+sum(sex_DMPs_males$sexDMPFDR<0.005)/length(sexDMPs) #3.6% of sex DMPs with FT (bacon) in males
+#nobacon
+sex_DMPs_males$sexDMPFDR=p.adjust(sex_DMPs_males$adj.P.Val)
+males_sexDMPs_sig=sex_DMPs_males[sex_DMPs_males$sexDMPFDR<0.005,]#13 sexDMPs with FT in males no bacon
+sum(sex_DMPs_males$sexDMPFDR<0.005)/length(sexDMPs) #0.4% of sex DMPs with FT (no bacon) in males
+
+#now females with sex DMPS
+sex_DMPs_females=females_corrected[females_corrected$cpg %in% sexDMPs$MarkerName,]
+sex_DMPs_females$sexDMPFDR=p.adjust(sex_DMPs_females$PVALUE_CORR)
+sum(sex_DMPs_females$sexDMPFDR<0.005)/length(sexDMPs) #90 DMPs with bacon associated iwht FT in females,2.9% of sex DMPs
+#nobacon
+sex_DMPs_females=females_corrected[females_corrected$cpg %in% sexDMPs$MarkerName,]
+sex_DMPs_females$sexDMPFDR=p.adjust(sex_DMPs_females$adj.P.Val)
+sum(sex_DMPs_females$sexDMPFDR<0.005)/length(sexDMPs)#4 DMPS without bacon with FT in females across sex DMPs,0.12% of sex DMPS
+
+#NOW. same as just did. redo gene smart FT with bacon.. for FT use without controls, since they dont add to FT
+setwd("~/git")
+M_merged_QUT_diagen=read.delim("M_merged_QUT_diagen_xhyb.txt")
+Gene_SMART_B=ilogit2(M_merged_QUT_diagen)
+
+pheno_imputed_final=read.delim("imputed_pheno_final.txt")
+
+#turn ft into a ratio
+pheno_imputed_final$TypeI=pheno_imputed_final$TypeI/100
+pheno_imputed_final$Timepoint=factor(pheno_imputed_final$Timepoint,levels=c("PRE","4WP"))
+pheno_imputed_final$sex=factor(pheno_imputed_final$sex)
+pheno_imputed_final$batch=factor(pheno_imputed_final$batch)
+
+
+design=model.matrix(~sex+Timepoint+Age_PRE+batch+TypeI,
+                    pheno_imputed_final)
+
+#corfit consensus=0.2520533 for M without controls for base model (~sex+Timepoint+Age_PRE+batch)
+#corfit = 0.2526745 for B without controls for base model (~sex+Timepoint+Age_PRE+batch+TypeI)
+
+#corfit consensus=0.2445399 for M without controls for FT model (~sex+Timepoint+Age_PRE+batch)
+#corfit = 0.245715 for B without control for FT model (~sex+Timepoint+Age_PRE+batch+TypeI)
+
+
+fit1 = lmFit(M_merged_QUT_diagen,
+              design,
+              block=pheno_imputed_final$ID,
+              correlation=0.2445399)
+fit2 <- eBayes(fit1)
+
+results <- limma::topTable(fit2,
+                           coef="sexmale",
+                           number=Inf,
+                           p.value=1)
+#Obtain standard error
+SE <- fit2$sigma * fit2$stdev.unscaled
+
+SE <- SE[rownames(results),"sexmale"]
+results <- cbind(results,SE)
+results$cpg=rownames(results)
+
+write.table(results,
+            file="GeneSMART_M_sex_FTmodel.tbl",
+            quote = FALSE,
+            row.names = FALSE,
+            col.names = TRUE,
+            sep="\t")
+
+#then do the same for the beta (just go up and change first lmfit line and the name of the saved file)
+#then do the same for +FT model for M and beta
+
+#then bacon them
+library(bacon)
+library(readr)
+
+
+setwd("~/git/study 1/tbls for FT GS")
+#List all files ending in "tbl" in the folder
+files <- list.files()[grep(".tbl",list.files())]
+directory="~/git/study 1/tbls for FT GS/corrected"
+#Run each file in bacon using a loop
+for (f in files)
+{
+  file <- read_tsv(f) #Read the file
+  f <- sub("\\.tbl", "", f) #Obtain the name of the dataset without the ".tbl" at the end
+  print(f) #show which dataset we are currently analysing
+  bc <- bacon(teststatistics = NULL, #run bacon on effect sizes and standard errors
+              effectsizes = file$logFC,
+              standarderrors = file$SE)
+  #bias and inflation=what it outputs  
+  tiff(paste0('QQ-plot_',f,'.tiff'), #save the graph of raw and adjusted effect sizes and standard errors
+       width =4,
+       height = 2.5,
+       units = 'in',
+       res=600)
+  print(plot(bc, type="qq")) #q-q plot shows the deviation of p-value distribution from null hypothesis. The observed P values for each CpG are sorted from largest to smallest and plotted against expected values from a theoretical ??2-distribution.
+  dev.off()
+  
+  print(c(inflation(bc), #show the inflation factor for this dataset
+          bias(bc))) #show the bias factor for this dataset
+  
+  file$EFFECTSIZE_CORR <- es(bc)[,1] #add a column to the file corresponding to the corrected effect size
+  file$SE_CORR <- se(bc)[,1] #add a column to the file corresponding to the corrected standard error
+  file$PVALUE_CORR <- pval(bc)[,1] #add a column to the file corresponding to the corrected p-value
+  write.table(file, #save the file
+              file=paste0(directory,"/",f,"_corrected.tbl"),
+              quote = FALSE,
+              row.names = FALSE,
+              col.names = TRUE,
+              sep="\t")
+}
+
+#then p adjust the bacon adj p values
+#results from FUSION base and FT models for sex and FT
+setwd("~/git/study 1/tbls for FT GS/corrected")
+GS_M_sex_base=read.delim("GeneSMART_M_sex_basemodel_corrected.tbl")
+GS_M_sex_base$FDR=p.adjust(GS_M_sex_base$PVALUE_CORR,method="BH")
+sig_GS_base=GS_M_sex_base[GS_M_sex_base$FDR<0.005,]
+# 8476 DMPs after correcting bacon, before it was 45,191 without bacon
+#total 641715 Cpgs, so 63.3% of DMPs are still sig after adj for ft (using bacon), or 75.8% without bacon adj
+
+GS_M_sex_FTmodel=read.delim("GeneSMART_M_sex_FTmodel_corrected.tbl")
+GS_M_sex_FTmodel$FDR=p.adjust(GS_M_sex_FTmodel$PVALUE_CORR,method="BH")
+sig_GS_sex_FTmodel=GS_M_sex_FTmodel[GS_M_sex_FTmodel$adj.P.Val<0.005,]
+# 5360 DMPs with sex when adjust for FT (FT as a ratio), 34,246 without bacon
+
+
+GS_M_FT_FTmodel=read.delim("GeneSMART_M_FT_FTmodel_corrected.tbl")
+GS_M_FT_FTmodel$FDR=p.adjust(GS_M_FT_FTmodel$PVALUE_CORR,method="BH")
+sig_GS_FTmodel=GS_M_FT_FTmodel[GS_M_FT_FTmodel$FDR<0.005,]
+#3257 with FT (as ratio instead of percentage!)
+sum(sig_GS_FTmodel$logFC>0)/nrow(sig_GS_FTmodel) #93.6% of ft dmps are hypermeth in typeI
+
+sexDMPs=sig_GS_base$cpg
+selected_DMPs_from_FT=GS_M_FT_FTmodel[GS_M_FT_FTmodel$cpg %in% sexDMPs,]
+selected_DMPs_from_FT$sexDMPFDR=p.adjust(selected_DMPs_from_FT$PVALUE_CORR)
+sum(selected_DMPs_from_FT$sexDMPFDR<0.005)/length(sexDMPs)
+
+#old gs corrected, i really really really hope the results are exactly the same, please oh please oh pleaseeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+GS_old=read.delim("GENESMART_corrected.tbl")
+GS_old$FDR=p.adjust(GS_old$PVALUE_CORR,method="BH")
+sig_GS_old=GS_old[GS_old$FDR<0.005,] #5182 DMPs with sex but realized that here did interaction of sex and time, maybe thats the difference
+
+#venn d
+library(VennDiagram)
+DMPs_base=GS_M_sex_base[GS_M_sex_base$adj.P.Val<0.005,]
+DMPs_FT=GS_M_sex_FTmodel[GS_M_sex_FTmodel$adj.P.Val<0.005,]
+
+venn.diagram(
+  x = list(DMPs_base$cpg, DMPs_FT$cpg),
+  category.names = c("DMPs (base model)",
+                     "DMPs (+FT model)"),
+  filename = "VennD DMPs base vs FT model not bacon adj.tiff",
+  output=TRUE,
+  col=c("#440154ff", '#21908dff'),
+  cex=2,
+  lwd=1.2,
+  fill = c("#440154ff", '#21908dff'),
+  cat.cex = 1.5,
+  cat.default.pos = "outer",
+  cat.pos = c(-10, 10),
+  cat.dist = c(0.05, 0.05),
+  scaled=FALSE,
+  resolution=600
+)
+
+#volcano for FT
+#volcano
+library(dplyr)
+library(ggplot2)
+setwd("~/git/study 1/tbls for FT GS/corrected")
+GS_B_FT_FTmodel=read.delim("GeneSMART_B_FT_FTmodel_corrected.tbl")
+GS_B_FT_FTmodel=GS_B_FT_FTmodel[match(GS_M_FT_FTmodel$cpg,GS_B_FT_FTmodel$cpg),]
+GS_M_FT_FTmodel$BetaEffectSize=GS_B_FT_FTmodel$logFC*100
+
+CpGs=GS_M_FT_FTmodel$cpg
+GS_M_FT_FTmodel = mutate(GS_M_FT_FTmodel, sig=ifelse(GS_M_FT_FTmodel$FDR<0.005, "FDR<0.005", "Not Sig"))
+GS_M_FT_FTmodel = mutate(GS_M_FT_FTmodel, coef=ifelse(GS_M_FT_FTmodel$BetaEffectSize<0, "neg", "pos"))
+GS_M_FT_FTmodel = mutate(GS_M_FT_FTmodel, color=ifelse(GS_M_FT_FTmodel$FDR>0.005,"black",ifelse(GS_M_FT_FTmodel$FDR<0.005&GS_M_FT_FTmodel$coef=="neg","blue","red")))#for some reason worked this way and not when i did adjp> so above two lines are kind of extra but helped to make sure it was correct
+GS_M_FT_FTmodel=data.frame(CpGs,GS_M_FT_FTmodel)
+#ifelse- "if its met" "it will do this", volcano
+GS_M_FT_FTmodel$color<-as.factor(GS_M_FT_FTmodel$color)
+p=ggplot(GS_M_FT_FTmodel, aes(BetaEffectSize, -log10(P.Value))) +
+  geom_point(aes(col=color),size=0.3)+
+  scale_color_manual(values=c("black","#1F78B4", "#E31A1C"))+
+  labs(x="% DNAm change per % increase in type I fibre content",y="-log10(p-value)")+
+  theme_minimal()+
+  theme(legend.position = "none")+
+  xlim(-50, 50)
+
+#is it already in percentage? chech scatter, it is. this scatter has soething messed up in it but already done it before no need
+FT_DMPs=sig_GS_FTmodel$cpg
+
+
+
+Gene_SMART_B_PREs=dplyr::select(Gene_SMART_B,contains("PRE"))
+Beta_Fiber_DMPs=Gene_SMART_B_PREs[FT_DMPs,]
+
+pheno_imputed_final_PREs=pheno_imputed_final[pheno_imputed_final$Timepoint=="PRE",]
+participant_sex=as.character(pheno_imputed_final_PREs$sex)
+
+Beta_Fiber_DMPs_sex=rbind(Beta_Fiber_DMPs,participant_sex)
+
+participant_FT=pheno_imputed_final_PREs$TypeI
+
+
+Beta_Fiber_DMPs_sex_FT=rbind(Beta_Fiber_DMPs_sex,participant_FT)
+
+participant_ID=pheno_imputed_final_PREs$ID
+
+Beta_Fiber_DMPs_sex_FT_ID=rbind(Beta_Fiber_DMPs_sex_FT,participant_ID)
+
+Beta_Fiber_DMPs_sex_FT_ID$CpG=rownames(Beta_Fiber_DMPs_sex_FT_ID)
+
+
+Beta_FT_DMPs_to_graph=as.data.frame(t(Beta_Fiber_DMPs_sex_FT_ID))
+
+library(tidyverse)
+
+DMP_longer=pivot_longer(data=Beta_FT_DMPs_to_graph,
+                        cols=-c("3258","3259","3260"),#last 3 columns since it makes gibrish ones
+                        names_to = c("CpG"),
+                        values_to = "DNAm_Beta")
+
+DMP_longer=DMP_longer[1:9771,]#8835 DMPs x 65 PRE= 574275 
+
+
+colnames(DMP_longer)=c("sex","TypeI","ID","CpG","DNAm_Beta")
+
+library(RColorBrewer)
+
+DMP_longer=DMP_longer %>%
+  mutate(across(!ID&!sex & !CpG, as.numeric))
+
+
+#DMPs=all_results[all_results$adj.P.Val<0.005,]
+
+which.min(resultsFT$logFC)
+min(resultsFT$logFC)
+View(all_results[which.max(resultsFT$logFC),])
+
+#cg19083458 and cg11688469
+one_DMP=DMP_longer[DMP_longer$CpG=="cg19083458",]
+
+q=ggplot(one_DMP, aes(TypeI, DNAm_Beta))+ 
+  geom_point(aes(col=sex),size=1)+
+  scale_color_manual(values=c("#FC8D62","#66C2A5"))+
+  labs(x="% type I fibre proportion",y="DNAm for cg19083458 (beta)")+
+  theme_minimal()
+# theme(legend.position = "none")
+
+tiff("Volcano plot in Type I fibers_GS bacon adj.tiff",
+     height=4.5,
+     width=4.5,
+     units="in",
+     res=600)
+p
+dev.off()
+
+#FT gene smart just beta reg
+library(betareg) #use a beta regression to compare proportions that may have differing distributions
+pheno_imputed_final$sex=factor(pheno_imputed_final$sex)
+pheno_imputed_final$Type1=pheno_imputed_final$TypeI/100
+betareg=betareg(Type1~sex+Age_PRE,pheno_imputed_final)
+summary(betareg)
+
+#great, now redo hormone analysis from study 2, sep males and females
+#for hormones dont use male con, but use the 6 female controls
+
+#compare results from sex*timepoint+age+batch to sex+timepoint+age+batch
+#run model for the "+" one, and then bacon it, and then make a 2D plot of the effect sizes in the original vs correct one ***can just do beta
+design <- model.matrix(~Timepoint+Age_PRE+sex+batch,
+                       merged_pheno)
+
+corfit <- duplicateCorrelation(M_merged_QUT_diagen,
+                               design,
+                               block = merged_pheno$ID) #watch out this takes 30 min (took 1:50!!!!gr)
+#corfit consensus for 130 m/f (no cons) for sex+timepoint+age+batch (NO INTERACTION) for beta=0.2526745 
+#corfit consensus for 130 m/f (no cons) for sex+timepoint+age+batch (NO INTERACTION) for M=0.2520533
+
+fit = lmFit(M_merged_QUT_diagen,
+            design,
+            block=merged_pheno$ID,
+            correlation=0.2520533) 
+
+fit2 <- eBayes(fit)
+
+results=limma::topTable(fit2,
+                 coef="sexmale",
+                 number=Inf,
+                 p.value=1)
+#Obtain standard error
+SE <- fit2$sigma * fit2$stdev.unscaled
+
+SE <- SE[rownames(results),"sexmale"]
+results <- cbind(results,SE)
+results$cpg=rownames(results)
+
+write.table(results,
+            file="results_sex_genesmart_NO_interaction_M_sex_age_batch_tp.tbl",
+            quote = FALSE,
+            row.names = FALSE,
+            col.names = TRUE,
+            sep="\t")
+
+#then do the same for the beta (just go up and change first lmfit line and the name of the saved file)
+#then do the same for +FT model for M and beta
+
+#then bacon them
+library(bacon)
+library(readr)
+
+
+setwd("~/git/study 1/no interaction model GS/temp")
+#List all files ending in "tbl" in the folder
+files <- list.files()[grep(".tbl",list.files())]
+directory="~/git/study 1/no interaction model GS/temp"
+#Run each file in bacon using a loop
+for (f in files)
+{
+  file <- read_tsv(f) #Read the file
+  f <- sub("\\.tbl", "", f) #Obtain the name of the dataset without the ".tbl" at the end
+  print(f) #show which dataset we are currently analysing
+  bc <- bacon(teststatistics = NULL, #run bacon on effect sizes and standard errors
+              effectsizes = file$logFC,
+              standarderrors = file$SE)
+  #bias and inflation=what it outputs  
+  tiff(paste0('QQ-plot_',f,'.tiff'), #save the graph of raw and adjusted effect sizes and standard errors
+       width =4,
+       height = 2.5,
+       units = 'in',
+       res=600)
+  print(plot(bc, type="qq")) #q-q plot shows the deviation of p-value distribution from null hypothesis. The observed P values for each CpG are sorted from largest to smallest and plotted against expected values from a theoretical ??2-distribution.
+  dev.off()
+  
+  print(c(inflation(bc), #show the inflation factor for this dataset
+          bias(bc))) #show the bias factor for this dataset
+  
+  file$EFFECTSIZE_CORR <- es(bc)[,1] #add a column to the file corresponding to the corrected effect size
+  file$SE_CORR <- se(bc)[,1] #add a column to the file corresponding to the corrected standard error
+  file$PVALUE_CORR <- pval(bc)[,1] #add a column to the file corresponding to the corrected p-value
+  write.table(file, #save the file
+              file=paste0(directory,"/",f,"_corrected.tbl"),
+              quote = FALSE,
+              row.names = FALSE,
+              col.names = TRUE,
+              sep="\t")
+}
+
+#load beta and make corrected_final
+GS_beta_corrected=read.delim("results_sex_genesmart_NO_interaction_beta_sex_age_batch_tp_corrected.tbl")
+GS_beta_corrected$EFFECTSIZE_CORR100=GS_beta_corrected$EFFECTSIZE_CORR*100
+GS_beta_corrected$SE_CORR_100=GS_beta_corrected$SE_CORR*100
+GS_beta_corrected$ALLELE1 <- rep(1,nrow(results)) #fake allele info (not important)
+GS_beta_corrected$ALLELE2 <- rep(2,nrow(results)) #fake allele info (not important)
+
+#oops add allele12 to M
+GS_M_corrected=read.delim("results_sex_genesmart_NO_interaction_M_sex_age_batch_tp_corrected.tbl")
+GS_M_corrected$ALLELE1 <- rep(1,nrow(results)) #fake allele info (not important)
+GS_M_corrected$ALLELE2 <- rep(2,nrow(results)) #fake allele info (not important)
+
+write.table(GS_M_corrected,
+            file="results_sex_genesmart_NO_interaction_M_sex_age_batch_tp_corrected.tbl",
+            quote = FALSE,
+            row.names = FALSE,
+            col.names = TRUE,
+            sep="\t")
+
+#then compare the effect sizes of this model (META) to the original
+
+
+#combine FDR of M but ES of B
+meta_M_nointeraction=read.delim("meta_no_interaction_M.TBL")
+meta_B_nointeraction=read.delim("meta_no_interaction_beta.TBL")
+t_statistic=meta_M_nointeraction$Effect/meta_M_nointeraction$StdErr
+meta_M_nointeraction$t_stat=t_statistic
+meta_M_nointeraction$BetaEffectSize=meta_B_nointeraction$Effect
+META_filtered_nointeraction=meta_M_nointeraction[meta_M_nointeraction$Direction!="-??"&meta_M_nointeraction$Direction!="?-?"&meta_M_nointeraction$Direction!="?-?"&meta_M_nointeraction$Direction!="??-"&meta_M_nointeraction$Direction!="??+"&meta_M_nointeraction$Direction!="?+?"&meta_M_nointeraction$Direction!="+??", ]
+FDR=p.adjust(META_filtered_nointeraction$P.value, method = "fdr", n = length(META_filtered_nointeraction$P.value))
+META_filtered_nointeraction$FDR=FDR
+
+DMPs=META_filtered[META_filtered$FDR<0.005,]
+rownames(DMPs)=DMPs$MarkerName
+
+DMPs_nointeraction=META_filtered_nointeraction[META_filtered$FDR<0.005,]
+rownames(DMPs_nointeraction)=DMPs_nointeraction$MarkerName
+
+
+#2D plot (also for FUSION 2TD, colors not right)
+
+Effect_sizes_together=inner_join(DMPs,DMPs_nointeraction,by="MarkerName")
+
+
+gg=ggplot(Effect_sizes_together, aes(BetaEffectSize.x, BetaEffectSize.y)) +
+  geom_point(aes(color=FDR.y),size=0.1)+
+  scale_color_gradientn(name = "FDR in no 
+  int. meta-analysis", trans = "log", breaks =  c(0.0000000000000005,0.0005,0.005,0.5),limits = c(0.0000000000000005,0.5),colours=c("red","orange","yellow","black"))+
+  #scale_color_gradient()+
+  #scale_colour_gradient2(low = "yellow", mid = "darkblue", high = "red", midpoint = log(0.005))+ 
+  #scale_color_manual(values=c("black","#1F78B4", "#E31A1C"))+
+  labs(x="% DNAm difference btwn males compared
+       to females (original meta-analysis)",y="% DNAm difference btwn males compared
+       to females (no int. meta-analysis)")+
+  theme_minimal()+
+  labs(color = "FDR in no int.
+       model")+
+  geom_vline(xintercept = 0) + geom_hline(yintercept = 0)+
+  theme(legend.title = element_text(size = 8),
+        legend.text = element_text(size = 8))
+
+
+tiff("2D plot of eff sizes in orig vs no interaction.tiff",
+     height = 3.5,
+     width = 5,
+     units = "in",
+     res = 600)
+gg
+dev.off()
+
+
+##refind infaltion factors and biases
+setwd("~/git/study 1/tbls for meta")
+#List all files ending in "tbl" in the folder
+files <- list.files()[grep(".tbl",list.files())]
+directory="~/git/study 1/tbls for meta"
+library(tidyverse)
+
+#Run each file in bacon using a loop
+for (f in files)
+{
+  file <- read_tsv(f) #Read the file
+  f <- sub("\\.tbl", "", f) #Obtain the name of the dataset without the ".tbl" at the end
+  print(f) #show which dataset we are currently analysing
+  bc <- bacon(teststatistics = NULL, #run bacon on effect sizes and standard errors
+              effectsizes = file$EFFECTSIZE,
+              standarderrors = file$SE)
+  #bias and inflation=what it outputs  
+  tiff(paste0('QQ-plot_',f,'.tiff'), #save the graph of raw and adjusted effect sizes and standard errors
+       width =4,
+       height = 2.5,
+       units = 'in',
+       res=600)
+  print(plot(bc, type="qq")) #q-q plot shows the deviation of p-value distribution from null hypothesis. The observed P values for each CpG are sorted from largest to smallest and plotted against expected values from a theoretical ??2-distribution.
+  dev.off()
+  
+  print(c(inflation(bc), #show the inflation factor for this dataset
+          bias(bc))) #show the bias factor for this dataset
+  
+  file$EFFECTSIZE_CORR <- es(bc)[,1] #add a column to the file corresponding to the corrected effect size
+  file$SE_CORR <- se(bc)[,1] #add a column to the file corresponding to the corrected standard error
+  file$PVALUE_CORR <- pval(bc)[,1] #add a column to the file corresponding to the corrected p-value
+  write.table(file, #save the file
+              file=paste0(directory,"/",f,"_correctedCOPY.tbl"),
+              quote = FALSE,
+              row.names = FALSE,
+              col.names = TRUE,
+              sep="\t")
+}
+
+
+####to hopefully not have to redo the whole analysis bcs of this one female XY in FUSION, do meta analysis and 2D plot
+setwd("~/git/git")
+FUSION_B=read.delim("FUSION_B_xhyb_removed.txt")
+FUSION_pheno=read.delim("FUSION_phenotypes.txt")
+
+
+library(dplyr)
+FUSION_pheno_noXYfem=FUSION_pheno[!FUSION_pheno$SUBJECT_ID %in% c("S28975"),]
+FUSION_B_noXYfem=FUSION_B[,colnames(FUSION_B) %in% FUSION_pheno_noXYfem$SUBJECT_ID]
+FUSION_pheno_noXYfem$sex=factor(FUSION_pheno_noXYfem$sex,levels=c("F","M"))
+FUSION_pheno_noXYfem$ogtt_status=factor(FUSION_pheno_noXYfem$ogtt_status)
+FUSION_pheno_noXYfem$smoke_current=factor(FUSION_pheno_noXYfem$smoke_current)
+
+#Create the model with Age as a predictor, and add other covariates
+design=model.matrix(~age_biopsy+sex+bmi+smoke_current+ogtt_status, #adjust for BMI
+                    FUSION_pheno_noXYfem)
+
+fit1 <- lmFit(FUSION_B_noXYfem, #do the analysis on the M-matrix
+              design)
+fit2 <- eBayes(fit1)
+
+#SE: SE around the slope for age
+#ES:change in methylation per year of age
+#Obtain regression coefficient and p-value for each CpG
+results <- limma::topTable(fit2,
+                           coef="sexM",
+                           number=Inf,
+                           p.value=1)
+#Obtain standard error
+SE <- fit2$sigma * fit2$stdev.unscaled
+
+SE <- SE[rownames(results),"sexM"]
+results <- cbind(results,SE)
+
+
+
+#Save results, need it in a format good for METAL
+CPG <- rownames(results) #name of marker (CpG)
+ALLELE1 <- rep(1,nrow(results)) #fake allele info (not important)
+ALLELE2 <- rep(2,nrow(results)) #fake allele info (not important)
+TESTSTAT <- results$t #t-statistic
+PVALUE <- results$P.Value #p-value
+EFFECTSIZE <- results$logFC #effect size
+SE <- results$SE #standard error
+results = data.frame(CPG,
+                     ALLELE1,
+                     ALLELE2,
+                     TESTSTAT,
+                     PVALUE,
+                     EFFECTSIZE,
+                     SE)
+write.table(results,
+            file="FUSION_B_noXYfem.tbl",
+            quote = FALSE,
+            row.names = FALSE,
+            col.names = TRUE,
+            sep="\t")
+
+#same but for M
+FUSION_M_noXYfem=logit2(FUSION_B_noXYfem)
+
+#Create the model with Age as a predictor, and add other covariates
+design=model.matrix(~age_biopsy+sex+bmi+smoke_current+ogtt_status, #adjust for BMI
+                    FUSION_pheno_noXYfem)
+
+fit1 <- lmFit(FUSION_M_noXYfem, #do the analysis on the M-matrix
+              design)
+fit2 <- eBayes(fit1)
+
+#SE: SE around the slope for age
+#ES:change in methylation per year of age
+#Obtain regression coefficient and p-value for each CpG
+results <- limma::topTable(fit2,
+                           coef="sexM",
+                           number=Inf,
+                           p.value=1)
+#Obtain standard error
+SE <- fit2$sigma * fit2$stdev.unscaled
+
+SE <- SE[rownames(results),"sexM"]
+results <- cbind(results,SE)
+
+
+
+#Save results, need it in a format good for METAL
+CPG <- rownames(results) #name of marker (CpG)
+ALLELE1 <- rep(1,nrow(results)) #fake allele info (not important)
+ALLELE2 <- rep(2,nrow(results)) #fake allele info (not important)
+TESTSTAT <- results$t #t-statistic
+PVALUE <- results$P.Value #p-value
+EFFECTSIZE <- results$logFC #effect size
+SE <- results$SE #standard error
+results = data.frame(CPG,
+                     ALLELE1,
+                     ALLELE2,
+                     TESTSTAT,
+                     PVALUE,
+                     EFFECTSIZE,
+                     SE)
+write.table(results,
+            file="FUSION_M_noXYfem.tbl",
+            quote = FALSE,
+            row.names = FALSE,
+            col.names = TRUE,
+            sep="\t")
+
+#now go do bacon
+library(bacon)
+
+setwd("~/git/study 1/FUSION no xy female tbls")
+#List all files ending in "tbl" in the folder
+files <- list.files()[grep(".tbl",list.files())]
+directory="~/git/study 1/FUSION no xy female tbls"
+library(tidyverse)
+
+#Run each file in bacon using a loop
+for (f in files)
+{
+  file <- read_tsv(f) #Read the file
+  f <- sub("\\.tbl", "", f) #Obtain the name of the dataset without the ".tbl" at the end
+  print(f) #show which dataset we are currently analysing
+  bc <- bacon(teststatistics = NULL, #run bacon on effect sizes and standard errors
+              effectsizes = file$EFFECTSIZE,
+              standarderrors = file$SE)
+  #bias and inflation=what it outputs  
+  tiff(paste0('QQ-plot_',f,'.tiff'), #save the graph of raw and adjusted effect sizes and standard errors
+       width =4,
+       height = 2.5,
+       units = 'in',
+       res=600)
+  print(plot(bc, type="qq")) #q-q plot shows the deviation of p-value distribution from null hypothesis. The observed P values for each CpG are sorted from largest to smallest and plotted against expected values from a theoretical ??2-distribution.
+  dev.off()
+  
+  print(c(inflation(bc), #show the inflation factor for this dataset
+          bias(bc))) #show the bias factor for this dataset
+  
+  file$EFFECTSIZE_CORR <- es(bc)[,1] #add a column to the file corresponding to the corrected effect size
+  file$SE_CORR <- se(bc)[,1] #add a column to the file corresponding to the corrected standard error
+  file$PVALUE_CORR <- pval(bc)[,1] #add a column to the file corresponding to the corrected p-value
+  write.table(file, #save the file
+              file=paste0(directory,"/",f,"_corrected.tbl"),
+              quote = FALSE,
+              row.names = FALSE,
+              col.names = TRUE,
+              sep="\t")
+}
+
+
+#FOR THE BETA VALUES FILE: METAL doesn't like small values and it will round them up to a point that is no longer exploitable, so before you run METAL (just after bacon), multiply the beta-values adjusted effect sizes and standard errors by 100
+setwd("~/git/study 1/FUSION no xy female tbls")
+FUSION_B_noXYfem_corrected=read.delim("FUSION_B_noXYfem_corrected.tbl")
+FUSION_B_noXYfem_corrected$EFFECTSIZE_CORR100=FUSION_B_noXYfem_corrected$EFFECTSIZE_CORR*100
+FUSION_B_noXYfem_corrected$SE_CORR_100=FUSION_B_noXYfem_corrected$SE_CORR*100
+
+write.table(FUSION_B_noXYfem_corrected,
+            file="FUSION_B_noXYfem_corrected_final.tbl",
+            quote = FALSE,
+            row.names = FALSE,
+            col.names = TRUE,
+            sep="\t")
+
+#done with metal, now load and check if diabetes changes how many DMPs I get..
+#start here when env deletes
+##now go to METAL and input!!!!
+#the corrected values from bacon were used and the meta analysis is complete and I am now uploading it back to git
+setwd("~/git/study 1")
+META_M_noXYfem=read.delim("META_noXYfem_M.TBL")
+META_B_noXYfem=read.delim("META_noXYfem_B.TBL")
+
+
+
+#must add t-stat for DMRcate
+t_statistic=META_M_noXYfem$Effect/META_M_noXYfem$StdErr
+META_M_noXYfem$t_stat=t_statistic
+
+#add effect sizes of beta for volcano plot (currently as a percentage, can divide by 100 if want to)
+META_M_noXYfem$BetaEffectSize=META_B_noXYfem$Effect
+
+#FIRST filter cpgs that are included in 2 or more studies, but dont filter for direction because that would bias the pval adj that im doing next
+#levels(META_M$Direction)
+META_filtered_noXYfem=META_M_noXYfem[META_M_noXYfem$HetDf>=1,]
+
+
+#THEN, adjust the p value with FDR or bonferonni (read online and I think FDR best for this exploratory study)
+FDR=p.adjust(META_filtered_noXYfem$P.value, method = "fdr", n = length(META_filtered_noXYfem$P.value))
+META_filtered_noXYfem$FDR=FDR
+DMPs_noXYfem=META_filtered_noXYfem[META_filtered$FDR<0.005,]
+rownames(DMPs_noXYfem)=DMPs_noXYfem$MarkerName
+
+#for GSEA
+DMPs_noXYfem=META_filtered_noXYfem[META_filtered_noXYfem$FDR<0.005,]
+rownames(DMPs_noXYfem)=DMPs_noXYfem$MarkerName
+
+#now graph the DMP effect sizes in a 2D plot, x axis: effext sizes of DMPs from reg analysis, y axis: effect sizes of DMPs from healthy peeps analysis
+Effect_sizes_together=inner_join(DMPs,DMPs_noXYfem,by="MarkerName")
+gg=ggplot(Effect_sizes_together, aes(BetaEffectSize.x, BetaEffectSize.y)) +
+  geom_point(aes(color=FDR.y),size=0.1)+
+  scale_color_gradientn(name = "FDR w/o XY female analysis", trans = "log", breaks =  c(0.0000000000000005,0.0005,0.005,0.5),limits = c(0.0000000000000005,0.5),colours=c("red","orange","yellow","black"))+
+  labs(x="% DNAm diff btwn males compared
+       to females (original meta-analysis)",y="% DNAm diff btwn males compared to 
+       females (w/o XY female meta-analysis)")+
+  theme_minimal()+
+  labs(color = "FDR w/o XY female 
+      analysis")+
+  geom_vline(xintercept = 0) + geom_hline(yintercept = 0)+
+  theme(legend.title = element_text(size = 8),
+        legend.text = element_text(size = 8))
+
+
+
+tiff("2D plot of eff sizes in full meta vs meta without XYfemale.tiff",
+     height = 3.5,
+     width = 5,
+     units = "in",
+     res = 600)
+gg
+dev.off()
+
+#check is similar number of DEGs
+annotation$MarkerName=annotation$probeID
+DMPs_ann=left_join(DMPs,annotation,by="MarkerName")
+DMPs_noXY_anno=left_join(DMPs_noXYfem,annotation,by="MarkerName")
+
+DMG_orig = unique(unlist(strsplit(DMPs_ann$genesUniq,split=";"))) #16,919
+DMG_noXY = unique(unlist(strsplit(DMPs_noXY_anno$genesUniq,split=";"))) #17,176
+overlap=DMG_noXY[DMG_noXY %in% DMG_orig] #16896
+length(overlap)/length(DMG_orig)
