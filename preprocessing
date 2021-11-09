@@ -1,0 +1,110 @@
+library(readxl)
+library(tidyverse)
+library(ChAMP)
+library(Methylaid)
+library(minfo)
+library(sva)
+library(minfi)
+
+#preprocessing idat files:
+#load the directory of my DNA samples, I have created this file manually in excel that has sample ID, position number, batch number, sex, age. Must be a CSV file
+#filter XY chromosomes since have males and females- filterxy=TRUE
+#filter out cpgs that are close to SNPs because they will be innacurate rep of me bcs its not binding the same there
+#filterDetP=always TRUE (need to filter out the probes that were of bad quality) when above 0.01 its a "failed probe"
+#must do filter XY in males/females to determine meth at sex chrom should look like two separate clusters of males and females (looks at 1000 most variable cpgs in the whole genome, many of them on the Y chromosome, that is the methylation being taken into consideration)
+#DetPcut= threshold for filterDetp (dont need to change from default of 0.01)
+#removeDetP=should I remove the sample that had bad probes? may remove whole individual, default is if over 10% of probes failed then remove sample)
+#filterNOCG=TRUE (default false, remove things that showed up that arent CpGs)
+#filterSNPs=TRUE (remove CpGs that are meQTLs) (if working on meQTLs run without this)
+#filterMultiHit=TURE (by default true, want to remove probes that were "unspecific", they binded to many places)
+#for stats purposes it turns 0.0001 methylation into 0 and .9998 into 1, due to bimodal distribution there will be many that are close to 0 or close to 1. but many cpgs will be highly effected by exercise and dietand will have a me of 0.2, 0.3)
+
+my_load=champ.load(directory="C:/Users/e5110554/OneDrive - Victoria University/backup of computer/Documents/Diagenode data",
+                   filterXY=TRUE,
+                   arraytype = "EPIC",
+                   filterDetP=TRUE,
+                   filterNoCG = TRUE,
+                   population="EUR")
+
+#*****remove the ~40,000 cross hybrdizing probes from Pidsley et al (https://doi.org/10.1186/s13059-016-1066-1; CHAMP package was not updated to remove all of these)****
+crosshyb_probes=read_excel("Cross reactive and SNP probes from Pidsley et al.xlsx")
+my_load=my_load$beta[!rownames(my_load$beta) %in% crosshyb_probes$ProbeID,]
+
+#Save the raw beta-value matrix that champ.load loaded for you in a txt file
+write.table(my_load$beta,
+            file="Raw beta values.txt",
+            quote=FALSE,
+            row.names=TRUE,
+            col.names=TRUE,
+            sep='\t')
+
+#produce quality control graphs to look at the data (myload is a list with 3 elements: 1.beta 2. intensity, 3.pheno data)
+champ.QC(beta=my_load$beta,
+         pheno=my_load$pd$sex)
+
+#rawbeta=read.delim("Raw beta values.txt") #load the saved file
+#Normalization of Type I and Type II probes 
+myNorm <- champ.norm(beta=rawbeta,
+                     arraytype="EPIC")
+targets<-read.metharray.sheet
+
+#Next step is to normalise due to technology having Type 1 and Type 2 probes and the chemistry behind each is slight different. So when you look at normal distribution may be slightly different, normalise the type 1 and type 2 probes
+#there have been a few types of ways to analyze probes (chemistrywise), type I (older), type II, and then BMiQ makes it so that the two can be mixed statistically in the same analysis.
+#27K, 450K, EPIC*-- EPIC has both type I and type II probes
+myNorm= champ.norm(beta=my_load$beta,
+                   arraytype = "EPIC") #Don't change any other defaults.
+write.table(myNorm,
+            file = "Normalised beta values.txt",
+            quote = FALSE,
+            row.names = TRUE,
+            col.names = TRUE,
+            sep = '\t')
+
+#produce quality control graphs to look at the data after normalization
+pd=read_excel("phenotypes_myload.xlsx")
+pd=read.csv("directory_preprocessing.csv") #so SVD uses ID in PCA
+champ.QC(beta=myNorm,
+         resultsDir="./CHAMP_Normalization/",
+         pheno=pd$sex)
+
+#Single Value Decomposition (SVD)
+#add phenotypes of interest to identify main sources of variability in DNA methylation
+#Age, sex, batch, position, timepoint, fitness....
+#SVD must have factors, sample ID gets dropped bcs they are all unique
+pd$Sentrix_ID=as.factor(pd$Sentrix_ID) 
+champ.SVD(beta=myNorm,
+          pd=pd,
+          resultsDir = "./CHAMP_SVDimages/")
+
+#run combat to correct batch effects, first converting to M values bcs thats what the function uses
+myNorm<-read.delim("Normalized beta values.txt")
+M<-logit2(myNorm)
+batch=pd$Sentrix_ID
+position=pd$Sentrix_Position
+myCombad=ComBat(dat=as.matrix(M),  #it outputs an M value matrix that has been adjusted for batch
+                batch=batch,
+                mod=NULL)
+#now correct for position
+myCombat=ComBat(dat=as.matrix(myCombad),
+                batch=position,
+                mod=NULL)
+myCombad_beta=ilogit2(myCombad) #batch correction
+myCombat_beta=ilogit2(myCombat) #position correction after batch correction
+
+#Run SVD again
+champ.SVD(beta=myCombad_beta,
+          pd=pd,
+          resultsDir="./CHAMP_SVDimages/batch_corrected_2/")
+
+#run again after corrected for position
+champ.SVD(beta=myCombat_beta,
+          pd=pd,
+          resultsDir="./CHAMP_SVDimages/batch_position_corrected_randomvar/")
+
+#Save
+write.table(myCombat_beta,
+            file="Normalized beta values after batch correction.txt",
+            quote=FALSE,
+            row.names=TRUE,
+            col.names=TRUE,
+            sep='\t')
