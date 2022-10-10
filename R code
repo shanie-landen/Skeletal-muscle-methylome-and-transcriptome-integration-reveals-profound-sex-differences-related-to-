@@ -607,9 +607,9 @@ count_nonDMPs$DMPstatus2="non-DMPs"
 chrom_stat_all <- rbind(count_hyper,count_hypo,count_nonDMPs)
 
 chrom_stat_all$E107=as.character(chrom_stat_all$E107)
-s<-strsplit(chrom_stat_all$E107,'[_]')
+s<-strsplit(chrom_stat_all$E107,'[_]')#to extract everything after _ 
 s=unlist(s)
-s=s[c(FALSE,TRUE)] #to extract everything after _ THERE MUST BE AN EASIER WAY BUT THIS WORKED!
+s=s[c(FALSE,TRUE)] 
 
 chrom_stat_all$E107=s
 chrom_stat_all$E107=factor(chrom_stat_all$E107,levels=c("TssA", "TssAFlnk","TxFlnk","Tx","TxWk","EnhG","Enh","ZNF/Rpts","Het","TssBiv", "BivFlnk","EnhBiv" ,"ReprPC" , "ReprPCWk" ,"Quies"))
@@ -667,19 +667,18 @@ differing_results=differing_results[!grepl(',',differing_results$E108),]
 
 #this will remove everything before _ and then set the levels because the levels must be the same to find which are the same
 differing_results$E107=as.character(differing_results$E107)
-s<-strsplit(differing_results$E107,'[_]')
+s<-strsplit(differing_results$E107,'[_]')#to extract everything after _ 
 s=unlist(s)
-s=s[c(FALSE,TRUE)] #to extract everything after _ THERE MUST BE AN EASIER WAY BUT THIS WORKED!
+s=s[c(FALSE,TRUE)] 
 
 differing_results$E107=s
 differing_results$E107=factor(differing_results$E107,levels=c("TssA", "TssAFlnk","TxFlnk","Tx","TxWk","EnhG","Enh","ZNF/Rpts","Het","TssBiv", "BivFlnk","EnhBiv" ,"ReprPC" , "ReprPCWk" ,"Quies"))
 
 #now same but for 108
 differing_results$E108=as.character(differing_results$E108)
-s<-strsplit(differing_results$E108,'[_]')
+s<-strsplit(differing_results$E108,'[_]')#to extract everything after _ 
 s=unlist(s)
-s=s[c(FALSE,TRUE)] #to extract everything after _ THERE MUST BE AN EASIER WAY BUT THIS WORKED!
-
+s=s[c(FALSE,TRUE)] 
 differing_results$E108=s
 differing_results$E108=factor(differing_results$E108,levels=c("TssA", "TssAFlnk","TxFlnk","Tx","TxWk","EnhG","Enh","ZNF/Rpts","Het","TssBiv", "BivFlnk","EnhBiv" ,"ReprPC" , "ReprPCWk" ,"Quies"))
 
@@ -743,7 +742,7 @@ grset_hyper=grset[hyper]
 grset_hypo=grset[hypo]
 grset_nonsig=grset[nonsig]
 
-prop_hyper=data.frame(getIslandStatus(grset_hyper)) #this works too but doesnt give exact number they want
+prop_hyper=data.frame(getIslandStatus(grset_hyper)) 
 count_hyper=plyr::count(prop_hyper, "getIslandStatus.grset_hyper.") 
 count_hyper$Percentage=(count_hyper$freq/length(DMPs_to_graph))*100 #bcs removed the ones that were annotated to both
 count_hyper$DMPstatus="DMPs"
