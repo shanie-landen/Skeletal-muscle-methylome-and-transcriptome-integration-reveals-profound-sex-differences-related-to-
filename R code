@@ -434,7 +434,7 @@ DMPs=left_join(DMPs,annotation,by="probeID")
 CpGs=META_filtered$MarkerName
 all_results = mutate(META_filtered, sig=ifelse(META_filtered$FDR<0.005, "FDR<0.005", "Not Sig"))
 all_results = mutate(all_results, coef=ifelse(all_results$BetaEffectSize<0, "neg", "pos"))
-all_results = mutate(all_results, color=ifelse(all_results$FDR>0.005,"black",ifelse(all_results$FDR<0.005&all_results$coef=="neg","blue","red")))#for some reason worked this way and not when i did adjp> so above two lines are kind of extra but helped to make sure it was correct
+all_results = mutate(all_results, color=ifelse(all_results$FDR>0.005,"black",ifelse(all_results$FDR<0.005&all_results$coef=="neg","blue","red")))
 all_results=data.frame(CpGs,all_results)
 #ifelse- "if its met" "it will do this", volcano
 all_results$color<-as.factor(all_results$color)
@@ -561,7 +561,7 @@ nonsig=rownames(META_filtered[which(META_filtered$FDR>0.005),]) #meta_filtered= 
 nonsig_w_chr_st=annotation[nonsig,]
 nonsig_w_chr_st$DMPstatus="non-DMP"
 chromatin_states_combined=rbind(sig_w_chr_st,nonsig_w_chr_st)
-DMPs_to_graph=sig_w_chr_st[!grepl(',',sig_w_chr_st$E107),] #this will remove those few that are annotated to multiple chromatin states!!! so DMPs changes from 56,813 to 56,762
+DMPs_to_graph=sig_w_chr_st[!grepl(',',sig_w_chr_st$E107),] #this will remove those few that are annotated to multiple chromatin states
 count_DMPs=dplyr::count(DMPs_to_graph, E107)
 colnames(count_DMPs)=c("E107","number of DMPs")
 count_DMPs$`Percentage_of_DMPs`=(count_DMPs$`number of DMPs`/nrow(DMPs_to_graph))*100 #bcs removed the ones that were annotated to both, or should divide by 26,525?
@@ -569,7 +569,7 @@ count_DMPs$DMPstatus="DMPs"
 nonDMPs_to_graph=nonsig_w_chr_st[!grepl(',',nonsig_w_chr_st$E107),]
 count_nonDMPs=dplyr::count(nonDMPs_to_graph, E107)
 colnames(count_nonDMPs)=c("E107","number of nonDMPs")
-count_nonDMPs$Percentage_of_nonDMPs=(count_nonDMPs$`number of nonDMPs`/nrow(nonDMPs_to_graph))*100 #bcs removed the ones that were annotated to both, or should divide by 673025 (dim of nonsig_w_chr_st) this is for ones that are annotated to two chrom states?
+count_nonDMPs$Percentage_of_nonDMPs=(count_nonDMPs$`number of nonDMPs`/nrow(nonDMPs_to_graph))*100 #bcs removed the ones that were annotated to both
 count_nonDMPs$DMPstatus="non-DMPs"
 chromatin_states_combined=cbind(count_DMPs,count_nonDMPs)
 chromatin_states_combined2=chromatin_states_combined[,-1]
@@ -745,7 +745,7 @@ grset_nonsig=grset[nonsig]
 
 prop_hyper=data.frame(getIslandStatus(grset_hyper)) #this works too but doesnt give exact number they want
 count_hyper=plyr::count(prop_hyper, "getIslandStatus.grset_hyper.") 
-count_hyper$Percentage=(count_hyper$freq/length(DMPs_to_graph))*100 #bcs removed the ones that were annotated to both, or should divide by 26,525?
+count_hyper$Percentage=(count_hyper$freq/length(DMPs_to_graph))*100 #bcs removed the ones that were annotated to both
 count_hyper$DMPstatus="DMPs"
 count_hyper$DMPstatus2="Hyper"
 
