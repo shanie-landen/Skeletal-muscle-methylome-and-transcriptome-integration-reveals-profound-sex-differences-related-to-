@@ -473,7 +473,7 @@ b=ggboxplot(data=cpgs_phenos_FUSION, x='sex', y='cg03143849',
   scale_fill_brewer(palette = "Set2") #GSE= "Sex" and FUSION &GENESMART= "sex"  #repeat for each DMP and dataset of interest
 
 #PCA of all three datasets for DMPs
-FUSION_pheno$sex=factor(FUSION_pheno$sex, levels=c("M","F"))#for some reason males showing up on left
+FUSION_pheno$sex=factor(FUSION_pheno$sex, levels=c("M","F"))
 merged_pheno$sex=factor(merged_pheno$sex, levels=c("male","female"))
 GSE38291_pheno$Sex=factor(GSE38291_pheno$Sex,levels=c("M","F"))
 
